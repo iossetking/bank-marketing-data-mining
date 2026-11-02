@@ -11,7 +11,6 @@ https://huggingface.co/datasets/adityasuyal/cafe-sales-cleaned/blob/main/dirty_c
 ### Download
 
 ```
-# Windows
-cd datasets/raw
+mkdir -p datasets/raw && cd datasets/raw
 curl -L -o dirty_cafe_sales.csv https://huggingface.co/datasets/adityasuyal/cafe-sales-cleaned/resolve/main/dirty_cafe_sales.csv
 ```
