@@ -16,8 +16,17 @@ UCI Bank Marketing (https://archive.ics.uci.edu/dataset/222/bank+marketing)
 uv sync
 ```
 
+or
+
 ### pip
 
 ```
 pip install .
+```
+
+
+## Usage
+
+```
+uv run marimo edit notebooks/data-mining.py
 ```
