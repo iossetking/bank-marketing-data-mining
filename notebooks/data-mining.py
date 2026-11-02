@@ -130,6 +130,86 @@ def _(y):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 2. Diagnostico de Calidad de los Datos
+
+    Identificar valores faltantes, duplicados, inconsistencias y valores atípicos.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 3. Limpieza de Datos
+
+    Aplicar estrategias necesarias para tratar los problemas identificados y justificando las decisiones tomadas.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 4. Transformación de Variables
+
+    Incluir codificación de variables categóricas y el escalamiento de variables numéricas, según corresponda.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 5. Ingeniería de características
+
+    Mediante la creación de al menos dos variables derivadas, explicando su utilidad.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 6. Aplicación de dos métodos de filtro para la selección de características
+
+    Comparar e interpretar los resultados obtenidos.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 7. Partición del conjunto de datos en entrenamiento y prueba
+
+    Justificar la estrategia utilizada.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 8. Implementación de validación cruzada de 5 particiones
+
+    Considerar la naturaleza del problema.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 9. Conclusiones
+
+    Resultados obtenidos durante la preparación de datos y las características seleccionadas.
+    """)
+    return
+
+
 @app.cell
 def _():
     return
