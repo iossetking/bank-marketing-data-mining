@@ -1,4 +1,4 @@
-# Cafe Sales Data Mining
+# Bank Marketing Data Mining
 
 ## Requirements
 
@@ -6,18 +6,7 @@
 
 ## Dataset
 
-Cafe Sales
-
-### URL
-
-https://huggingface.co/datasets/adityasuyal/cafe-sales-cleaned/blob/main/dirty_cafe_sales.csv
-
-### Download
-
-```
-mkdir -p datasets/raw && cd datasets/raw
-curl -L -o dirty_cafe_sales.csv https://huggingface.co/datasets/adityasuyal/cafe-sales-cleaned/resolve/main/dirty_cafe_sales.csv
-```
+UCI Bank Marketing (https://archive.ics.uci.edu/dataset/222/bank+marketing)
 
 ## Install Libraries
 
