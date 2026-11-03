@@ -43,19 +43,19 @@ def _(mo):
     | `age` | Edad del cliente, en años. |
     | `job` | Tipo de trabajo u ocupación: admin., blue-collar, entrepreneur, housemaid, management, retired, self-employed, services, student, technician, unemployed o unknown. |
     | `marital` | Estado civil: divorced, married, single o unknown. `divorced` también incluye a personas viudas. |
-    | `education` | Nivel educativo: basic.4y, basic.6y, basic.9y, high.school, illiterate, professional.course, university.degree o unknown. |
+    | `education` | Nivel educativo: primary, secondary o tertiary; algunos registros no lo reportan. |
     | `default` | Indica si el cliente tiene crédito en mora (yes/no). |
     | `balance` | Saldo anual promedio del cliente, en euros. |
     | `housing` | Indica si el cliente tiene un préstamo hipotecario (yes/no). |
     | `loan` | Indica si el cliente tiene un préstamo personal (yes/no). |
-    | `contact` | Tipo de medio de contacto: unknown, telephone o cellular. |
-    | `day` | Día del mes del último contacto de esta campaña. |
+    | `contact` | Tipo de medio de contacto: telephone o cellular; algunos registros no lo reportan. |
+    | `day_of_week` | Día del mes del último contacto de esta campaña (nombre conservado de la fuente). |
     | `month` | Mes del último contacto de esta campaña (jan–dec). |
     | `duration` | Duración del último contacto, en segundos. |
     | `campaign` | Número de contactos realizados durante esta campaña para este cliente, incluido el último contacto. |
     | `pdays` | Días desde el último contacto del cliente en una campaña anterior; `-1` indica que no había sido contactado anteriormente. |
     | `previous` | Número de contactos realizados para este cliente antes de esta campaña. |
-    | `poutcome` | Resultado de la campaña de marketing anterior: unknown, other, failure o success. |
+    | `poutcome` | Resultado de la campaña anterior: other, failure o success; los faltantes indican que no se registró resultado previo. |
     | `y` | Variable objetivo: indica si el cliente suscribió un depósito a plazo fijo (yes/no). |
     """)
     return
@@ -85,9 +85,11 @@ def _(mo):
 def _():
     # Se importan las librerías para manipular datos, graficar y entrenar el modelo.
     import matplotlib.pyplot as plt
+    import numpy as np
     import pandas as pd
+    import seaborn as sns
     from sklearn.compose import ColumnTransformer
-    from sklearn.feature_selection import SelectKBest, chi2, mutual_info_classif
+    from sklearn.feature_selection import SelectKBest, chi2
     from sklearn.impute import SimpleImputer
     from sklearn.linear_model import LogisticRegression
     from sklearn.metrics import (
@@ -103,6 +105,7 @@ def _():
     from sklearn.model_selection import StratifiedKFold, cross_validate, train_test_split
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
+    from scipy.stats import chi2_contingency, pearsonr
     from ucimlrepo import fetch_ucirepo
 
     return (
@@ -122,9 +125,12 @@ def _():
         cross_validate,
         f1_score,
         fetch_ucirepo,
-        mutual_info_classif,
+        np,
         pd,
         plt,
+        sns,
+        chi2_contingency,
+        pearsonr,
         precision_score,
         recall_score,
         roc_auc_score,
@@ -207,12 +213,12 @@ def _(datos_brutos, pd):
 
 @app.cell
 def _(datos_brutos, pd):
-    # Se inspeccionan categorías especiales; en este conjunto unknown no se asume faltante.
+    # Se inspeccionan faltantes y valores especiales documentados por la fuente.
     columnas_texto = datos_brutos.select_dtypes(include=["object", "string"]).columns
-    conteo_unknown = pd.DataFrame(
+    conteo_faltantes_categoricos = pd.DataFrame(
         {
-            "unknown": [
-                (datos_brutos[col].astype(str).str.lower() == "unknown").sum()
+            "faltantes": [
+                datos_brutos[col].isna().sum()
                 for col in columnas_texto
             ]
         },
@@ -222,7 +228,99 @@ def _(datos_brutos, pd):
         "Registros con pdays = -1 (sin contacto previo): "
         f"{(datos_brutos['pdays'] == -1).sum():,}"
     )
-    conteo_unknown
+    conteo_faltantes_categoricos
+    return
+
+
+@app.cell
+def _(datos_brutos, np, pd, plt, sns):
+    # IQR se usa como señal de revisión, no como regla automática de eliminación.
+    _columnas_numericas_diagnostico = datos_brutos.select_dtypes(include="number").columns.tolist()
+    _cuantiles = datos_brutos[_columnas_numericas_diagnostico].quantile([0.25, 0.75]).T
+    _cuantiles.columns = ["q1", "q3"]
+    _cuantiles["iqr"] = _cuantiles["q3"] - _cuantiles["q1"]
+    _cuantiles["limite_inferior"] = _cuantiles["q1"] - 1.5 * _cuantiles["iqr"]
+    _cuantiles["limite_superior"] = _cuantiles["q3"] + 1.5 * _cuantiles["iqr"]
+    _conteo_atipicos = pd.DataFrame(
+        {
+            "valores_atipicos_iqr": [
+                int(
+                    (
+                        (datos_brutos[_col] < _cuantiles.loc[_col, "limite_inferior"])
+                        | (datos_brutos[_col] > _cuantiles.loc[_col, "limite_superior"])
+                    ).sum()
+                )
+                for _col in _columnas_numericas_diagnostico
+            ]
+        },
+        index=_columnas_numericas_diagnostico,
+    )
+    diagnostico_atipicos = _cuantiles.join(_conteo_atipicos).round(2)
+
+    _n_columnas = 3
+    _n_filas = int(np.ceil(len(_columnas_numericas_diagnostico) / _n_columnas))
+    _fig_atipicos, _ejes_atipicos = plt.subplots(_n_filas, _n_columnas, figsize=(14, 3.6 * _n_filas))
+    for _eje, _columna in zip(_ejes_atipicos.flat, _columnas_numericas_diagnostico):
+        sns.boxplot(x=datos_brutos[_columna], ax=_eje, color="#8ecae6")
+        _eje.set_title(f"{_columna}: distribución y atípicos IQR")
+        _eje.set_xlabel(_columna)
+    for _eje in _ejes_atipicos.flat[len(_columnas_numericas_diagnostico):]:
+        _eje.set_visible(False)
+    _fig_atipicos.suptitle("Diagnóstico visual de valores atípicos", y=1.02, fontsize=14)
+    _fig_atipicos.tight_layout()
+    plt.show()
+    diagnostico_atipicos
+    return (diagnostico_atipicos,)
+
+
+@app.cell
+def _(datos_brutos, pd):
+    # Se comparan las categorías observadas con los dominios documentados después de normalizar texto.
+    _dominios_esperados = {
+        "job": {"admin.", "blue-collar", "entrepreneur", "housemaid", "management", "retired", "self-employed", "services", "student", "technician", "unemployed"},
+        "marital": {"divorced", "married", "single"},
+        "education": {"primary", "secondary", "tertiary"},
+        "default": {"no", "yes"},
+        "housing": {"no", "yes"},
+        "loan": {"no", "yes"},
+        "contact": {"cellular", "telephone"},
+        "month": {"jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"},
+        "poutcome": {"failure", "other", "success"},
+        "y": {"no", "yes"},
+    }
+    _filas_consistencia = []
+    for _columna, _dominio in _dominios_esperados.items():
+        _valores = datos_brutos[_columna].astype("string").str.strip().str.lower()
+        _observadas = set(_valores.dropna().unique())
+        _inesperadas = sorted(_observadas.difference(_dominio))
+        _filas_consistencia.append(
+            {
+                "variable": _columna,
+                "categorias_observadas": ", ".join(sorted(_observadas)),
+                "faltantes": int(_valores.isna().sum()),
+                "blancos": int(_valores.eq("").sum()),
+                "categorias_inesperadas": ", ".join(_inesperadas) if _inesperadas else "ninguna",
+                "resultado": "dominio consistente" if not _inesperadas and not _valores.eq("").any() else "requiere revisión",
+            }
+        )
+    consistencia_categoricas = pd.DataFrame(_filas_consistencia)
+    consistencia_categoricas
+    return (consistencia_categoricas,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    **Interpretación del diagnóstico.** Las marcas IQR y los puntos extremos de los diagramas de caja
+    identifican observaciones que merecen revisión, pero no son por sí mismos errores. En marketing
+    bancario, saldos elevados, muchos contactos o intervalos largos entre campañas pueden describir
+    clientes reales; eliminarlos sin evidencia cambiaría artificialmente la población objetivo. Por
+    ello se conservarán los valores numéricos y se aplicará escalamiento robusto a la escala de cada
+    variable. La tabla de consistencia permite confirmar que, una vez retirados espacios, las
+    categorías están dentro de los dominios documentados. Los faltantes de las categóricas no se
+    eliminan: se imputarán con la moda dentro del pipeline para no perder registros. `pdays = -1`
+    se mantiene porque expresa ausencia de contacto previo y puede ser predictivo.
+    """)
     return
 
 
@@ -231,7 +329,17 @@ def _(mo):
     mo.md(r"""
     ## 3. Limpieza de Datos
 
-    Aplicar estrategias necesarias para tratar los problemas identificados y justificando las decisiones tomadas.
+    La limpieza conserva la información de negocio y corrige solamente problemas verificables de formato
+    o duplicación. La siguiente tabla deja trazabilidad de cada decisión antes de ejecutarla.
+
+    | Problema identificado | Variables | Decisión | Justificación |
+    | --- | --- | --- | --- |
+    | Filas duplicadas exactas | Todas | Eliminar solo registros idénticos en todas las columnas | Evita sobreponderar una misma observación sin eliminar llamadas distintas de un cliente. |
+    | Espacios o diferencias de formato | Categóricas y objetivo | Recortar espacios y homogeneizar a minúsculas al evaluar dominios | Previene categorías duplicadas por captura; no altera su significado. |
+    | Faltantes categóricos | `job`, `education`, `contact`, `poutcome` | Imputar con la moda dentro del pipeline | Conserva registros y evita que estadísticos del conjunto de prueba influyan en entrenamiento. |
+    | `pdays = -1` | `pdays` | Conservar el valor | La documentación lo define como ausencia de contacto previo, no como dato faltante. |
+    | Valores atípicos IQR | Numéricas | Conservar y escalar; no truncar | No hay evidencia de error y los extremos pueden ser clientes o campañas reales. |
+    | Faltantes futuros | Numéricas y categóricas | Imputar dentro del pipeline de entrenamiento | Mantiene el flujo reproducible y evita fuga de información. |
     """)
     return
 
@@ -244,11 +352,8 @@ def _(datos_brutos, duplicados_brutos):
 
     # Se normalizan espacios en variables de texto para evitar categorías duplicadas por formato.
     columnas_texto_limpias = datos_limpios.select_dtypes(include=["object", "string"]).columns
-    for columna in columnas_texto_limpias:
-        datos_limpios[columna] = datos_limpios[columna].str.strip()
-
-    # unknown se conserva como categoría: expresa que la información no fue registrada.
-
+    for _columna in columnas_texto_limpias:
+        datos_limpios[_columna] = datos_limpios[_columna].str.strip().str.lower()
 
     # La imputación posterior queda dentro para no filtrar información del conjunto de prueba.
     print(f"Registros eliminados por duplicado: {duplicados_brutos:,}")
@@ -261,9 +366,31 @@ def _(mo):
     mo.md(r"""
     ## 4. Transformación de Variables y 5. Ingeniería de características
 
-    Se crean dos variables derivadas con datos disponibles antes de la llamada. La primera mide la
-    presión de contacto de la campaña y la segunda ajusta el saldo del cliente por sus créditos.
-    Después, las variables categóricas se codifican y las numéricas se escalan para el modelo.
+    Las transformaciones se definen antes de ejecutarse para distinguir los datos disponibles al
+    momento de priorizar una llamada de los datos que solo se conocen después. La imputación, el
+    escalamiento y la codificación se ajustan únicamente dentro del entrenamiento.
+
+    | Variable | Tipo de variable | Transformación propuesta | Justificación |
+    | --- | --- | --- | --- |
+    | `age` | Numérica | Mediana y MinMax | Atenúa el efecto de una escala distinta y mantiene valores no negativos. |
+    | `job` | Categórica nominal | Moda y one-hot | No existe un orden natural entre ocupaciones. |
+    | `marital` | Categórica nominal | Moda y one-hot | Representa estados sin jerarquía cuantitativa. |
+    | `education` | Categórica ordinal aproximada | Moda y one-hot | Evita imponer distancias arbitrarias entre niveles educativos. |
+    | `default` | Categórica binaria | Moda y one-hot | Conserva la interpretación sí/no. |
+    | `balance` | Numérica | Mediana y MinMax | Conserva la señal del saldo en una escala comparable. |
+    | `housing` | Categórica binaria | Moda y one-hot | Conserva el indicador de crédito hipotecario. |
+    | `loan` | Categórica binaria | Moda y one-hot | Conserva el indicador de crédito personal. |
+    | `contact` | Categórica nominal | Moda y one-hot | Los canales no tienen orden intrínseco. |
+    | `day_of_week` | Numérica discreta | Mediana y MinMax | Mantiene el momento mensual sin crear una jerarquía categórica. |
+    | `month` | Categórica temporal | Moda y one-hot | Permite patrones estacionales sin asumir distancia lineal entre meses. |
+    | `duration` | Numérica | Excluir | Solo se conoce al terminar la llamada; incluirla causaría fuga de información. |
+    | `campaign` | Numérica discreta | Mediana y MinMax y derivada | Resume la presión actual de contacto. |
+    | `pdays` | Numérica con código especial | Mediana y MinMax; conservar `-1` | El código identifica explícitamente falta de contacto previo. |
+    | `previous` | Numérica discreta | Mediana y MinMax y derivada | Aporta historial de campañas anteriores. |
+    | `poutcome` | Categórica nominal | Moda y one-hot | El resultado previo puede tener asociación con la suscripción. |
+    | `presion_contacto` | Numérica derivada | `campaign / (previous + 1)` y MinMax | Contrasta insistencia actual con historial previo, sin dividir entre cero. |
+    | `balance_ajustado_credito` | Numérica derivada | `balance / (1 + housing + loan)` y MinMax | Aproxima el saldo disponible considerando créditos reportados. |
+    | `y` | Objetivo binario | `yes` a 1 y `no` a 0 | Permite estimar una probabilidad de suscripción. |
     """)
     return
 
@@ -353,15 +480,17 @@ def _(
         ],
         remainder="drop",
     )
-    return (preprocesador,)
+    return preprocesador, transformador_categorico, transformador_numerico
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 6. Aplicación de dos métodos de filtro para la selección de características
+    ## 6. Partición del conjunto de datos en entrenamiento y prueba
 
-    Comparar e interpretar los resultados obtenidos.
+    Se reserva una muestra independiente antes de cualquier filtro. La estratificación mantiene en
+    entrenamiento y prueba la proporción de suscripciones, que es minoritaria, y permite que la
+    evaluación final represente la población original.
     """)
     return
 
@@ -385,9 +514,19 @@ def _(X_modelo, train_test_split, y_modelo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 7. Partición del conjunto de datos en entrenamiento y prueba
+    ## 7. Aplicación de métodos de filtro para la selección de características
 
-    Justificar la estrategia utilizada.
+    Los filtros se calculan solo sobre entrenamiento. Cada variable descriptiva se contrasta con
+    `y`: chi-cuadrada para categóricas y Pearson para numéricas. Los puntajes miden asociaciones,
+    no causalidad, y sirven para priorizar variables que deben revisarse junto con el contexto de
+    negocio.
+
+    | Criterio | Chi-cuadrada | Pearson |
+    | --- | --- | --- |
+    | Variables analizadas | Categóricas frente al objetivo binario | Numéricas frente al objetivo binario codificado 0/1 |
+    | Evidencia reportada | Estadístico, p-valor y V de Cramér | Correlación `r`, p-valor y valor absoluto de `r` |
+    | Lectura del ranking | Mayor V de Cramér indica asociación categórica más fuerte | Mayor `abs(r)` indica asociación lineal más fuerte |
+    | Comparación entre filtros | No se comparan sus magnitudes directamente: usan escalas distintas. Se comparan las variables relevantes dentro de su propio tipo. | No se comparan sus magnitudes directamente: usan escalas distintas. Se comparan las variables relevantes dentro de su propio tipo. |
     """)
     return
 
@@ -395,60 +534,145 @@ def _(mo):
 @app.cell
 def _(
     X_entrenamiento,
-    chi2,
-    mutual_info_classif,
+    chi2_contingency,
     pd,
-    preprocesador,
+    plt,
+    sns,
     y_entrenamiento,
 ):
-    # Ambos filtros se calculan solo con entrenamiento. Así el conjunto de prueba se mantiene intacto.
-    matriz_entrenamiento = preprocesador.fit_transform(X_entrenamiento)
-    nombres_transformados = preprocesador.get_feature_names_out()
-
-    # Filtro 1: chi-cuadrada mide asociación entre cada predictor no negativo y la clase.
-    estadistico_chi2, p_valores_chi2 = chi2(matriz_entrenamiento, y_entrenamiento)
-    ranking_chi2 = (
-        pd.DataFrame(
+    # Método 1: una tabla de contingencia por variable categórica frente a la respuesta.
+    _columnas_categoricas_filtro = X_entrenamiento.select_dtypes(exclude="number").columns
+    _resultados_chi = []
+    _tablas_contingencia = {}
+    for _columna in _columnas_categoricas_filtro:
+        _tabla = pd.crosstab(X_entrenamiento[_columna], y_entrenamiento)
+        _estadistico, _p_valor, _grados_libertad, _ = chi2_contingency(_tabla)
+        _n = _tabla.to_numpy().sum()
+        # V de Cramér permite comparar asociaciones con distinta cantidad de categorías.
+        _minimo_dimension = min(_tabla.shape) - 1
+        _v_cramer = (_estadistico / (_n * _minimo_dimension)) ** 0.5 if _minimo_dimension else 0.0
+        _resultados_chi.append(
             {
-                "caracteristica": nombres_transformados,
-                "estadistico_chi2": estadistico_chi2,
-                "p_valor": p_valores_chi2,
+                "variable": _columna,
+                "chi_cuadrada": _estadistico,
+                "p_valor": _p_valor,
+                "grados_libertad": _grados_libertad,
+                "v_cramer": _v_cramer,
             }
         )
-        .sort_values("estadistico_chi2", ascending=False)
-        .head(15)
+        _tablas_contingencia[_columna] = _tabla
+    ranking_chi2 = (
+        pd.DataFrame(_resultados_chi)
+        .sort_values(["v_cramer", "chi_cuadrada"], ascending=False)
         .reset_index(drop=True)
     )
 
-    # Filtro 2: información mutua detecta asociaciones lineales y no lineales.
-    puntajes_mi = mutual_info_classif(
-        matriz_entrenamiento, y_entrenamiento, random_state=42
+    _fig_ranking_chi, _eje_ranking_chi = plt.subplots(figsize=(9, 5))
+    sns.barplot(data=ranking_chi2, x="v_cramer", y="variable", hue="variable", legend=False, palette="Blues_r", ax=_eje_ranking_chi)
+    _eje_ranking_chi.set_title("Ranking chi-cuadrada de categóricas frente a suscripción")
+    _eje_ranking_chi.set_xlabel("V de Cramér (fuerza de asociación)")
+    _eje_ranking_chi.set_ylabel("Variable descriptiva")
+    _fig_ranking_chi.tight_layout()
+
+    _variables_chi_grafica = ranking_chi2.head(4)["variable"].tolist()
+    _fig_tablas_chi, _ejes_tablas_chi = plt.subplots(2, 2, figsize=(12, 8))
+    for _eje, _columna in zip(_ejes_tablas_chi.flat, _variables_chi_grafica):
+        sns.heatmap(_tablas_contingencia[_columna], annot=True, fmt="d", cmap="Blues", cbar=False, ax=_eje)
+        _eje.set_title(f"{_columna} vs y")
+        _eje.set_xlabel("Suscripción (0=no, 1=sí)")
+        _eje.set_ylabel(_columna)
+    _fig_tablas_chi.suptitle("Tablas de contingencia de las categóricas con mayor asociación", y=1.02, fontsize=14)
+    _fig_tablas_chi.tight_layout()
+    plt.show()
+    ranking_chi2.round(4)
+    return (ranking_chi2,)
+
+
+@app.cell(hide_code=True)
+def _(mo, ranking_chi2):
+    principal_chi = ranking_chi2.iloc[0]
+    mo.md(
+        f"""
+        **Interpretación de chi-cuadrada.** `{principal_chi['variable']}` presenta la mayor asociación
+        categórica con la suscripción (V de Cramér = **{principal_chi['v_cramer']:.3f}**; p-valor =
+        **{principal_chi['p_valor']:.3g}**). Las gráficas de contingencia muestran cómo se distribuyen
+        los sí y no dentro de cada categoría. Las variables con p-valor bajo son candidatas a conservar,
+        pero el tamaño de efecto evita confundir un resultado significativo por el gran tamaño muestral
+        con una asociación sustantiva.
+        """
     )
-    ranking_mi = (
-        pd.DataFrame(
-            {"caracteristica": nombres_transformados, "informacion_mutua": puntajes_mi}
+    return
+
+
+@app.cell
+def _(X_entrenamiento, pd, pearsonr, plt, sns, y_entrenamiento):
+    # Método 2: Pearson cuantifica la asociación lineal de cada numérica con y codificada 0/1.
+    _columnas_numericas_filtro = X_entrenamiento.select_dtypes(include="number").columns
+    _resultados_pearson = []
+    for _columna in _columnas_numericas_filtro:
+        _correlacion, _p_valor = pearsonr(X_entrenamiento[_columna], y_entrenamiento)
+        _resultados_pearson.append(
+            {
+                "variable": _columna,
+                "correlacion_pearson": _correlacion,
+                "abs_correlacion": abs(_correlacion),
+                "p_valor": _p_valor,
+            }
         )
-        .sort_values("informacion_mutua", ascending=False)
-        .head(15)
+    ranking_pearson = (
+        pd.DataFrame(_resultados_pearson)
+        .sort_values("abs_correlacion", ascending=False)
         .reset_index(drop=True)
     )
 
-    print("Las tablas muestran las 15 variables transformadas con mayor relevancia según cada filtro.")
-    return ranking_chi2, ranking_mi
+    _matriz_pearson = X_entrenamiento[_columnas_numericas_filtro].copy()
+    _matriz_pearson["y"] = y_entrenamiento.to_numpy()
+    _fig_matriz_pearson, _eje_matriz_pearson = plt.subplots(figsize=(11, 8))
+    sns.heatmap(_matriz_pearson.corr(method="pearson"), cmap="vlag", center=0, vmin=-1, vmax=1, annot=True, fmt=".2f", square=True, ax=_eje_matriz_pearson)
+    _eje_matriz_pearson.set_title("Matriz de correlación de Pearson: numéricas y objetivo")
+    _fig_matriz_pearson.tight_layout()
+
+    _fig_ranking_pearson, _eje_ranking_pearson = plt.subplots(figsize=(9, 5))
+    sns.barplot(data=ranking_pearson, x="correlacion_pearson", y="variable", hue="variable", legend=False, palette="vlag", ax=_eje_ranking_pearson)
+    _eje_ranking_pearson.axvline(0, color="black", linewidth=0.8)
+    _eje_ranking_pearson.set_title("Ranking Pearson de numéricas frente a suscripción")
+    _eje_ranking_pearson.set_xlabel("Correlación de Pearson con y")
+    _eje_ranking_pearson.set_ylabel("Variable descriptiva")
+    _fig_ranking_pearson.tight_layout()
+    plt.show()
+    ranking_pearson.round(4)
+    return (ranking_pearson,)
 
 
-@app.cell
-def _(ranking_chi2):
-    # Se muestra el primer filtro para comparar cuáles indicadores se asocian más con la respuesta.
-    ranking_chi2
+@app.cell(hide_code=True)
+def _(mo, ranking_pearson):
+    principal_pearson = ranking_pearson.iloc[0]
+    direccion = "positiva" if principal_pearson["correlacion_pearson"] > 0 else "negativa"
+    mo.md(
+        f"""
+        **Interpretación de Pearson.** `{principal_pearson['variable']}` tiene la mayor asociación lineal
+        absoluta entre las numéricas (r = **{principal_pearson['correlacion_pearson']:.3f}**, asociación
+        {direccion}; p-valor = **{principal_pearson['p_valor']:.3g}**). En la matriz, los tonos cercanos
+        a cero indican relaciones lineales débiles; por ello una variable puede ser útil en un modelo aun
+        si no domina este ranking, especialmente si su efecto depende de otras variables.
+        """
+    )
     return
 
 
 @app.cell
-def _(ranking_mi):
-    # Se muestra el segundo filtro; coincidencias con chi-cuadrada dan mayor confianza.
-    ranking_mi
-    return
+def _(pd, ranking_chi2, ranking_pearson):
+    # Comparación consolidada: cada ranking se conserva en su propia escala de asociación.
+    resumen_filtros = pd.concat(
+        [
+            ranking_chi2.assign(metodo="Chi-cuadrada", medida="V de Cramér", puntaje=ranking_chi2["v_cramer"])[["metodo", "variable", "medida", "puntaje", "p_valor"]],
+            ranking_pearson.assign(metodo="Pearson", medida="abs(r)", puntaje=ranking_pearson["abs_correlacion"])[["metodo", "variable", "medida", "puntaje", "p_valor"]],
+        ],
+        ignore_index=True,
+    ).sort_values(["metodo", "puntaje"], ascending=[True, False])
+    print("Comparación de variables descriptivas frente al objetivo, ordenada dentro de cada filtro:")
+    resumen_filtros.round(4)
+    return (resumen_filtros,)
 
 
 @app.cell(hide_code=True)
@@ -456,19 +680,67 @@ def _(mo):
     mo.md(r"""
     ## 8. Implementación de validación cruzada de 5 particiones
 
-    Considerar la naturaleza del problema.
+    La selección vuelve a ajustarse dentro de cada partición: chi-cuadrada para los indicadores
+    categóricos codificados y Pearson para las variables numéricas escaladas. Así, cada pliegue usa
+    únicamente sus propios datos de entrenamiento y la validación no recibe información adelantada.
+    Se usa regresión logística con ponderación balanceada porque la clase positiva es minoritaria.
     """)
     return
 
 
 @app.cell
-def _(LogisticRegression, Pipeline, SelectKBest, chi2, preprocesador):
-    # El pipeline encapsula preparación, selección y clasificación. De este modo, cada
-    # partición de validación cruza ajusta sus propios pasos sin conocer sus datos de validación.
+def _(
+    ColumnTransformer,
+    LogisticRegression,
+    Pipeline,
+    SelectKBest,
+    chi2,
+    columnas_categoricas,
+    columnas_numericas,
+    np,
+    pearsonr,
+    transformador_categorico,
+    transformador_numerico,
+):
+    # Se implementa Pearson como función de puntaje compatible con SelectKBest.
+    def puntaje_pearson(X, y):
+        puntajes, p_valores = [], []
+        for indice in range(X.shape[1]):
+            r, p_valor = pearsonr(X[:, indice], y)
+            puntajes.append(abs(r))
+            p_valores.append(p_valor)
+        return np.asarray(puntajes), np.asarray(p_valores)
+
+    # Cada rama aplica el filtro apropiado a su tipo de variable dentro de cada pliegue.
+    preprocesador_seleccion = ColumnTransformer(
+        transformers=[
+            (
+                "numericas",
+                Pipeline(
+                    steps=[
+                        ("preparacion", transformador_numerico),
+                        ("seleccion_pearson", SelectKBest(score_func=puntaje_pearson, k=6)),
+                    ]
+                ),
+                columnas_numericas,
+            ),
+            (
+                "categoricas",
+                Pipeline(
+                    steps=[
+                        ("preparacion", transformador_categorico),
+                        ("seleccion_chi2", SelectKBest(score_func=chi2, k=25)),
+                    ]
+                ),
+                columnas_categoricas,
+            ),
+        ],
+        remainder="drop",
+    )
+    # El pipeline encapsula preparación, filtros y clasificación para impedir fuga de información.
     modelo = Pipeline(
         steps=[
-            ("preprocesamiento", preprocesador),
-            ("seleccion", SelectKBest(score_func=chi2, k=25)),
+            ("preprocesamiento_y_seleccion", preprocesador_seleccion),
             (
                 "clasificador",
                 LogisticRegression(
@@ -569,17 +841,18 @@ def _(
 @app.cell
 def _(ConfusionMatrixDisplay, X_prueba, modelo, plt, y_prueba):
     # La matriz permite observar los aciertos y errores para ambas clases en prueba.
-    fig, ax = plt.subplots(figsize=(5, 4))
+    _fig_matriz_confusion, _ax_matriz_confusion = plt.subplots(figsize=(5, 4))
     ConfusionMatrixDisplay.from_estimator(
         modelo,
         X_prueba,
         y_prueba,
         display_labels=["No", "Sí"],
         cmap="Blues",
-        ax=ax,
+        ax=_ax_matriz_confusion,
     )
-    ax.set_title("Matriz de confusión en el conjunto de prueba")
-    fig.tight_layout()
+    _ax_matriz_confusion.set_title("Matriz de confusión en el conjunto de prueba")
+    _fig_matriz_confusion.tight_layout()
+    plt.show()
     return
 
 
@@ -594,24 +867,23 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(metricas_prueba, mo, ranking_chi2, ranking_mi, resultados_validacion):
+def _(metricas_prueba, mo, ranking_chi2, ranking_pearson, resultados_validacion):
     # Se construye una conclusión a partir de los valores calculados en la ejecución.
-    coincidencias = set(ranking_chi2["caracteristica"]).intersection(
-        set(ranking_mi["caracteristica"])
-    )
-    variables_coincidentes = ", ".join(sorted(coincidencias)[:5]) or "sin coincidencias directas"
+    variables_chi = ", ".join(ranking_chi2.head(3)["variable"])
+    variables_pearson = ", ".join(ranking_pearson.head(3)["variable"])
     mo.md(
         f"""
         ### Conclusión
 
-        Se preparó el conjunto eliminando duplicados exactos, conservando `unknown` como una
-        categoría informativa y creando dos variables derivadas: presión de contacto y balance
+        Se preparó el conjunto eliminando duplicados exactos, imputando las categorías faltantes
+        dentro de cada partición y creando dos variables derivadas: presión de contacto y balance
         ajustado por crédito. La variable `duration` se excluyó deliberadamente: usarla daría
         un resultado poco realista porque solo se conoce cuando la llamada ya terminó.
 
-        Los filtros de chi-cuadrada e información mutua coincidieron, entre otras, en: **{variables_coincidentes}**.
-        Esta coincidencia sugiere que dichas señales son candidatas estables, aunque la selección
-        definitiva se repite dentro de cada partición del modelo para evitar fuga de información.
+        El ranking chi-cuadrada destacó las categóricas **{variables_chi}** y Pearson destacó las
+        numéricas **{variables_pearson}**. Estos resultados se interpretan por separado porque las
+        escalas de asociación son diferentes; la selección definitiva se repite dentro de cada
+        partición del modelo para evitar fuga de información.
 
         En validación cruzada, el ROC AUC promedio fue de **{resultados_validacion.loc[0, 'promedio']:.3f}**
         y la exactitud balanceada fue de **{resultados_validacion.loc[1, 'promedio']:.3f}**. En el conjunto de
