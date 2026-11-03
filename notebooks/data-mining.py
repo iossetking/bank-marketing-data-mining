@@ -259,9 +259,11 @@ def _(datos_brutos, duplicados_brutos):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 4. Transformación de Variables
+    ## 4. Transformación de Variables y 5. Ingeniería de características
 
-    Incluir codificación de variables categóricas y el escalamiento de variables numéricas, según corresponda.
+    Se crean dos variables derivadas con datos disponibles antes de la llamada. La primera mide la
+    presión de contacto de la campaña y la segunda ajusta el saldo del cliente por sus créditos.
+    Después, las variables categóricas se codifican y las numéricas se escalan para el modelo.
     """)
     return
 
@@ -286,6 +288,22 @@ def _(datos_limpios):
         + datos_modelo["loan"].eq("yes").astype(int)
     )
 
+    # Se muestra un ejemplo para comprobar que las dos columnas sí fueron creadas.
+    print("Ejemplo de variables derivadas:")
+    print(
+        datos_modelo[
+            [
+                "campaign",
+                "previous",
+                "presion_contacto",
+                "balance",
+                "housing",
+                "loan",
+                "balance_ajustado_credito",
+            ]
+        ].head()
+    )
+
     # duration se excluye: se conoce al finalizar la llamada y no estaría disponible
     # cuando el banco tenga que decidir a quién contactar. Incluirla inflaría el desempeño.
     X_modelo = datos_modelo.drop(columns=["y", "duration"])
@@ -294,18 +312,6 @@ def _(datos_limpios):
     print("Distribución de la respuesta (0 = no, 1 = sí):")
     print(y_modelo.value_counts(normalize=True).rename("proporción").round(4))
     return X_modelo, y_modelo
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 5. Ingeniería de características
-
-    Mediante la creación de al menos dos variables derivadas, explicando su utilidad.
-    """)
-    return
-
-
 @app.cell
 def _(X_modelo):
     # Se identifican columnas por tipo para aplicar una preparación adecuada a cada grupo.
