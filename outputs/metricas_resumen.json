@@ -1,0 +1,277 @@
+{
+  "n_total": 45211,
+  "n_duplicados": 0,
+  "n_train": 36168,
+  "n_test": 9043,
+  "positivos_pct": 11.7,
+  "faltantes": {
+    "job": 288,
+    "education": 1857,
+    "contact": 13020,
+    "poutcome": 36959
+  },
+  "ranking_chi2": [
+    {
+      "variable": "poutcome",
+      "chi2": 1474.9938749430344,
+      "p_valor": 0.0,
+      "gl": 2,
+      "v_cramer": 0.47349474697523086
+    },
+    {
+      "variable": "month",
+      "chi2": 2395.2053992184533,
+      "p_valor": 0.0,
+      "gl": 11,
+      "v_cramer": 0.2573410887205647
+    },
+    {
+      "variable": "housing",
+      "chi2": 702.2740627064891,
+      "p_valor": 9.576248624376936e-155,
+      "gl": 1,
+      "v_cramer": 0.13934489651733228
+    },
+    {
+      "variable": "job",
+      "chi2": 687.0441584034762,
+      "p_valor": 3.792587638982574e-141,
+      "gl": 10,
+      "v_cramer": 0.13827368722469613
+    },
+    {
+      "variable": "education",
+      "chi2": 174.39633819374075,
+      "p_valor": 1.3499457910999878e-38,
+      "gl": 2,
+      "v_cramer": 0.07090740161025297
+    }
+  ],
+  "ranking_pearson": [
+    {
+      "variable": "pdays",
+      "correlacion": 0.10070327892568595,
+      "abs_correlacion": 0.10070327892568595,
+      "p_valor": 3.7155495935707355e-82
+    },
+    {
+      "variable": "presion_contacto",
+      "correlacion": -0.09206092687947184,
+      "abs_correlacion": 0.09206092687947184,
+      "p_valor": 6.529268801080338e-69
+    },
+    {
+      "variable": "previous",
+      "correlacion": 0.08884667808128711,
+      "abs_correlacion": 0.08884667808128711,
+      "p_valor": 2.7193182635936453e-64
+    },
+    {
+      "variable": "balance_ajustado_credito",
+      "correlacion": 0.07302751227140664,
+      "abs_correlacion": 0.07302751227140664,
+      "p_valor": 5.793932716105881e-44
+    },
+    {
+      "variable": "campaign",
+      "correlacion": -0.07197805527990983,
+      "abs_correlacion": 0.07197805527990983,
+      "p_valor": 9.34567718450667e-43
+    }
+  ],
+  "cv": [
+    {
+      "Modelo": "Gradient Boosting",
+      "ROC AUC": 0.7552,
+      "ROC AUC std": 0.0026,
+      "PR AUC": 0.4063,
+      "Exactitud Balanceada": 0.6995,
+      "F1": 0.3987,
+      "Precisión": 0.3067,
+      "Sensibilidad": 0.5703
+    },
+    {
+      "Modelo": "Bosque Aleatorio",
+      "ROC AUC": 0.7519,
+      "ROC AUC std": 0.0032,
+      "PR AUC": 0.3957,
+      "Exactitud Balanceada": 0.6954,
+      "F1": 0.3847,
+      "Precisión": 0.2873,
+      "Sensibilidad": 0.5826
+    },
+    {
+      "Modelo": "Regresión Logística",
+      "ROC AUC": 0.7445,
+      "ROC AUC std": 0.0005,
+      "PR AUC": 0.3852,
+      "Exactitud Balanceada": 0.6875,
+      "F1": 0.368,
+      "Precisión": 0.2678,
+      "Sensibilidad": 0.5883
+    },
+    {
+      "Modelo": "Árbol de Decisión",
+      "ROC AUC": 0.7329,
+      "ROC AUC std": 0.0034,
+      "PR AUC": 0.3631,
+      "Exactitud Balanceada": 0.6802,
+      "F1": 0.3555,
+      "Precisión": 0.2552,
+      "Sensibilidad": 0.589
+    }
+  ],
+  "test": [
+    {
+      "Modelo": "Bosque Aleatorio",
+      "ROC AUC": 0.7651,
+      "PR AUC": 0.4134,
+      "Exactitud": 0.7799,
+      "Exactitud Balanceada": 0.6999,
+      "F1": 0.3877,
+      "Precisión": 0.2874,
+      "Sensibilidad": 0.5955
+    },
+    {
+      "Modelo": "Gradient Boosting",
+      "ROC AUC": 0.7641,
+      "PR AUC": 0.4363,
+      "Exactitud": 0.8025,
+      "Exactitud Balanceada": 0.709,
+      "F1": 0.4102,
+      "Precisión": 0.3152,
+      "Sensibilidad": 0.587
+    },
+    {
+      "Modelo": "Regresión Logística",
+      "ROC AUC": 0.7521,
+      "PR AUC": 0.3931,
+      "Exactitud": 0.7642,
+      "Exactitud Balanceada": 0.6886,
+      "F1": 0.3692,
+      "Precisión": 0.2687,
+      "Sensibilidad": 0.5898
+    },
+    {
+      "Modelo": "Árbol de Decisión",
+      "ROC AUC": 0.7359,
+      "PR AUC": 0.3778,
+      "Exactitud": 0.7467,
+      "Exactitud Balanceada": 0.6815,
+      "F1": 0.3552,
+      "Precisión": 0.2529,
+      "Sensibilidad": 0.5964
+    }
+  ],
+  "mejor_modelo": "Gradient Boosting",
+  "importancia_top5": [
+    {
+      "variable": "month",
+      "importancia_media": 0.04429345902584368,
+      "importancia_std": 0.0037414732649633125
+    },
+    {
+      "variable": "poutcome",
+      "importancia_media": 0.023942635825916613,
+      "importancia_std": 0.0028239926323639745
+    },
+    {
+      "variable": "housing",
+      "importancia_media": 0.018384920686589902,
+      "importancia_std": 0.002260045964176924
+    },
+    {
+      "variable": "balance_ajustado_credito",
+      "importancia_media": 0.015433332583660642,
+      "importancia_std": 0.002742242341019738
+    },
+    {
+      "variable": "pdays",
+      "importancia_media": 0.013877029591164092,
+      "importancia_std": 0.002164337519955964
+    }
+  ],
+  "deciles": [
+    {
+      "decil": "Top 10%",
+      "clientes_contactados": 905,
+      "suscriptores_capturados": 441,
+      "tasa_conversion_pct": 48.73,
+      "ganancia_acumulada_pct": 41.68,
+      "lift": 4.17
+    },
+    {
+      "decil": "Top 20%",
+      "clientes_contactados": 1809,
+      "suscriptores_capturados": 592,
+      "tasa_conversion_pct": 32.73,
+      "ganancia_acumulada_pct": 55.95,
+      "lift": 2.8
+    },
+    {
+      "decil": "Top 30%",
+      "clientes_contactados": 2713,
+      "suscriptores_capturados": 691,
+      "tasa_conversion_pct": 25.47,
+      "ganancia_acumulada_pct": 65.31,
+      "lift": 2.18
+    },
+    {
+      "decil": "Top 40%",
+      "clientes_contactados": 3618,
+      "suscriptores_capturados": 774,
+      "tasa_conversion_pct": 21.39,
+      "ganancia_acumulada_pct": 73.16,
+      "lift": 1.83
+    },
+    {
+      "decil": "Top 50%",
+      "clientes_contactados": 4522,
+      "suscriptores_capturados": 829,
+      "tasa_conversion_pct": 18.33,
+      "ganancia_acumulada_pct": 78.36,
+      "lift": 1.57
+    },
+    {
+      "decil": "Top 60%",
+      "clientes_contactados": 5426,
+      "suscriptores_capturados": 888,
+      "tasa_conversion_pct": 16.37,
+      "ganancia_acumulada_pct": 83.93,
+      "lift": 1.4
+    },
+    {
+      "decil": "Top 70%",
+      "clientes_contactados": 6331,
+      "suscriptores_capturados": 939,
+      "tasa_conversion_pct": 14.83,
+      "ganancia_acumulada_pct": 88.75,
+      "lift": 1.27
+    },
+    {
+      "decil": "Top 80%",
+      "clientes_contactados": 7235,
+      "suscriptores_capturados": 984,
+      "tasa_conversion_pct": 13.6,
+      "ganancia_acumulada_pct": 93.01,
+      "lift": 1.16
+    },
+    {
+      "decil": "Top 90%",
+      "clientes_contactados": 8139,
+      "suscriptores_capturados": 1018,
+      "tasa_conversion_pct": 12.51,
+      "ganancia_acumulada_pct": 96.22,
+      "lift": 1.07
+    },
+    {
+      "decil": "Top 100%",
+      "clientes_contactados": 9043,
+      "suscriptores_capturados": 1058,
+      "tasa_conversion_pct": 11.7,
+      "ganancia_acumulada_pct": 100.0,
+      "lift": 1.0
+    }
+  ],
+  "reporte_mejor_modelo": "              precision    recall  f1-score   support\n\n          No       0.94      0.83      0.88      7985\n          Sí       0.32      0.59      0.41      1058\n\n    accuracy                           0.80      9043\n   macro avg       0.63      0.71      0.65      9043\nweighted avg       0.87      0.80      0.83      9043\n"
+}
