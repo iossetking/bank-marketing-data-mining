@@ -90,19 +90,16 @@ def _():
     import pandas as pd
     import seaborn as sns
     from sklearn.compose import ColumnTransformer
-    from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+    from sklearn.ensemble import RandomForestClassifier
     from sklearn.feature_selection import SelectKBest, chi2
     from sklearn.impute import SimpleImputer
-    from sklearn.inspection import permutation_importance
     from sklearn.linear_model import LogisticRegression
     from sklearn.metrics import (
         ConfusionMatrixDisplay,
         accuracy_score,
-        average_precision_score,
         balanced_accuracy_score,
         classification_report,
         f1_score,
-        precision_recall_curve,
         precision_score,
         recall_score,
         roc_auc_score,
@@ -119,7 +116,6 @@ def _():
         ColumnTransformer,
         ConfusionMatrixDisplay,
         DecisionTreeClassifier,
-        HistGradientBoostingClassifier,
         LogisticRegression,
         MinMaxScaler,
         OneHotEncoder,
@@ -130,7 +126,6 @@ def _():
         SimpleImputer,
         StratifiedKFold,
         accuracy_score,
-        average_precision_score,
         balanced_accuracy_score,
         chi2,
         chi2_contingency,
@@ -141,9 +136,7 @@ def _():
         np,
         pd,
         pearsonr,
-        permutation_importance,
         plt,
-        precision_recall_curve,
         precision_score,
         recall_score,
         roc_auc_score,
@@ -700,18 +693,17 @@ def _(pd, ranking_chi2, ranking_pearson):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 8. Implementación y comparación de métodos de clasificación (Validación cruzada 5-Fold)
+    ## 8. Comparación de modelos con validación cruzada (5 particiones)
 
-    Para abordar la predicción de suscripción a depósitos a plazo fijo no nos limitamos a un solo
-    algoritmo: comparamos cuatro métodos supervisados clásicos bajo exactamente el mismo flujo de
-    preprocesamiento y selección de características dentro de cada pliegue (evitando fuga de datos):
+    Para comparar distintos algoritmos bajo las mismas condiciones, probamos tres modelos clásicos
+    de clasificación supervisada dentro del mismo pipeline (con imputación, escalamiento y filtros
+    Chi-cuadrada y Pearson en cada partición para evitar fuga de datos):
 
-    1. **Regresión Logística:** modelo lineal base, rápido e interpretable.
-    2. **Árbol de Decisión:** modelo no lineal basado en reglas controladas (`max_depth=8`, `min_samples_leaf=50`).
-    3. **Bosque Aleatorio (Random Forest):** ensamble tipo *bagging* que reduce varianza y captura interacciones.
-    4. **Gradient Boosting (HistGradientBoosting):** ensamble secuencial tipo *boosting* muy eficaz en datos tabulares.
+    1. **Regresión Logística** (modelo lineal base).
+    2. **Árbol de Decisión** (`max_depth=6`, `min_samples_leaf=50`).
+    3. **Random Forest** (150 árboles, `max_depth=12`, `min_samples_leaf=20`).
 
-    Todos los modelos usan `class_weight="balanced"` debido a que la clase positiva representa solo el 11.7%.
+    Los tres usan `class_weight="balanced"` porque la clase positiva (sí contrata) es minoritaria (11.7%).
     """)
     return
 
@@ -720,7 +712,6 @@ def _(mo):
 def _(
     ColumnTransformer,
     DecisionTreeClassifier,
-    HistGradientBoostingClassifier,
     LogisticRegression,
     Pipeline,
     RandomForestClassifier,
@@ -733,7 +724,7 @@ def _(
     transformador_categorico,
     transformador_numerico,
 ):
-    # Se implementa Pearson como función de puntaje compatible con SelectKBest.
+    # Función de Pearson para usarla dentro de SelectKBest.
     def puntaje_pearson(X, y):
         puntajes, p_valores = [], []
         for indice in range(X.shape[1]):
@@ -769,30 +760,23 @@ def _(
             remainder="drop",
         )
 
-    # Cada pipeline encapsula imputación, escalamiento, filtros y clasificador.
     modelos = {
         "Regresión Logística": Pipeline(
             steps=[
-                ("preprocesamiento_y_seleccion", crear_preprocesador()),
-                ("clasificador", LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42)),
+                ("prep", crear_preprocesador()),
+                ("clf", LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42)),
             ]
         ),
         "Árbol de Decisión": Pipeline(
             steps=[
-                ("preprocesamiento_y_seleccion", crear_preprocesador()),
-                ("clasificador", DecisionTreeClassifier(max_depth=8, min_samples_leaf=50, class_weight="balanced", random_state=42)),
+                ("prep", crear_preprocesador()),
+                ("clf", DecisionTreeClassifier(max_depth=6, min_samples_leaf=50, class_weight="balanced", random_state=42)),
             ]
         ),
-        "Bosque Aleatorio": Pipeline(
+        "Random Forest": Pipeline(
             steps=[
-                ("preprocesamiento_y_seleccion", crear_preprocesador()),
-                ("clasificador", RandomForestClassifier(n_estimators=200, max_depth=12, min_samples_leaf=20, class_weight="balanced", random_state=42, n_jobs=-1)),
-            ]
-        ),
-        "Gradient Boosting": Pipeline(
-            steps=[
-                ("preprocesamiento_y_seleccion", crear_preprocesador()),
-                ("clasificador", HistGradientBoostingClassifier(max_depth=6, max_iter=150, learning_rate=0.05, class_weight="balanced", random_state=42)),
+                ("prep", crear_preprocesador()),
+                ("clf", RandomForestClassifier(n_estimators=150, max_depth=12, min_samples_leaf=20, class_weight="balanced", random_state=42, n_jobs=-1)),
             ]
         ),
     }
@@ -810,11 +794,10 @@ def _(
     sns,
     y_entrenamiento,
 ):
-    # Validación cruzada estratificada de 5 particiones sobre los cuatro modelos.
-    cv_estratificada = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    scoring_cv = {
+    # Validación cruzada estratificada de 5 particiones sobre los tres modelos.
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    scoring = {
         "roc_auc": "roc_auc",
-        "pr_auc": "average_precision",
         "balanced_accuracy": "balanced_accuracy",
         "f1": "f1",
         "precision": "precision",
@@ -823,21 +806,12 @@ def _(
 
     _filas_cv = []
     for _nombre, _pipe in modelos.items():
-        _res = cross_validate(
-            _pipe,
-            X_entrenamiento,
-            y_entrenamiento,
-            cv=cv_estratificada,
-            scoring=scoring_cv,
-            n_jobs=-1,
-            return_train_score=False,
-        )
+        _res = cross_validate(_pipe, X_entrenamiento, y_entrenamiento, cv=cv, scoring=scoring, n_jobs=-1)
         _filas_cv.append(
             {
                 "Modelo": _nombre,
                 "ROC AUC": _res["test_roc_auc"].mean(),
                 "ROC AUC std": _res["test_roc_auc"].std(),
-                "PR AUC": _res["test_pr_auc"].mean(),
                 "Exactitud balanceada": _res["test_balanced_accuracy"].mean(),
                 "F1": _res["test_f1"].mean(),
                 "Precisión": _res["test_precision"].mean(),
@@ -845,50 +819,37 @@ def _(
             }
         )
 
-    resultados_validacion = (
-        pd.DataFrame(_filas_cv)
-        .sort_values("ROC AUC", ascending=False)
-        .reset_index(drop=True)
-    )
+    resultados_validacion = pd.DataFrame(_filas_cv).sort_values("ROC AUC", ascending=False).reset_index(drop=True)
     mejor_modelo_nombre = resultados_validacion.iloc[0]["Modelo"]
 
-    _df_melt = resultados_validacion.melt(
+    _df_graf = resultados_validacion.melt(
         id_vars="Modelo",
         value_vars=["ROC AUC", "Exactitud balanceada", "F1", "Precisión", "Sensibilidad"],
         var_name="Métrica",
         value_name="Valor",
     )
-    _fig_cv, _ax_cv = plt.subplots(figsize=(11, 5))
-    sns.barplot(
-        data=_df_melt,
-        x="Métrica",
-        y="Valor",
-        hue="Modelo",
-        palette=["#1D4E89", "#00B2CA", "#F79256", "#7DCFB6"],
-        ax=_ax_cv,
-    )
-    _ax_cv.set_title("Comparación de modelos en validación cruzada estratificada (5 particiones)")
-    _ax_cv.set_ylim(0, 1.0)
-    for _container in _ax_cv.containers:
-        _ax_cv.bar_label(_container, fmt="%.2f", fontsize=8, padding=2)
-    _fig_cv.tight_layout()
+    _fig, _ax = plt.subplots(figsize=(9.5, 4.5))
+    sns.barplot(data=_df_graf, x="Métrica", y="Valor", hue="Modelo", palette="Blues_d", ax=_ax)
+    _ax.set_title("Comparación de modelos en validación cruzada (5 particiones)")
+    _ax.set_ylim(0, 1.0)
+    for _c in _ax.containers:
+        _ax.bar_label(_c, fmt="%.2f", fontsize=8, padding=2)
+    _fig.tight_layout()
     plt.show()
 
-    print(f"Modelo seleccionado por validación cruzada: {mejor_modelo_nombre}")
-    resultados_validacion.round(4)
+    print(f"Mejor modelo en validación cruzada: {mejor_modelo_nombre}")
+    resultados_validacion.round(3)
     return mejor_modelo_nombre, resultados_validacion
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 9. Evaluación en el conjunto de prueba y priorización de campañas telefónicas
+    ## 9. Evaluación en prueba y priorización de llamadas
 
-    Entrenamos los modelos sobre el 80% de entrenamiento y evaluamos una sola vez sobre el 20%
-    independiente de prueba (9,043 clientes). Además de las métricas clásicas, analizamos curvas
-    ROC, curvas Precisión-Sensibilidad, matrices de confusión, importancia de variables por
-    permutación y la **Curva de Ganancia Acumulada / Lift**, que conecta directamente el modelo
-    con el objetivo de priorizar llamadas telefónicas.
+    Ahora entrenamos los tres modelos con todo el conjunto de entrenamiento (80%) y los evaluamos
+    en el conjunto de prueba (20%) para ver sus curvas ROC, la matriz de confusión del mejor modelo,
+    las variables más importantes y qué tanto mejora la tasa de suscripción al priorizar llamadas.
     """)
     return
 
@@ -898,7 +859,6 @@ def _(
     X_entrenamiento,
     X_prueba,
     accuracy_score,
-    average_precision_score,
     balanced_accuracy_score,
     classification_report,
     f1_score,
@@ -927,7 +887,6 @@ def _(
             {
                 "Modelo": _nombre,
                 "ROC AUC": roc_auc_score(y_prueba, _prob),
-                "PR AUC": average_precision_score(y_prueba, _prob),
                 "Exactitud": accuracy_score(y_prueba, _pred),
                 "Exactitud balanceada": balanced_accuracy_score(y_prueba, _pred),
                 "F1": f1_score(y_prueba, _pred),
@@ -936,18 +895,10 @@ def _(
             }
         )
 
-    resultados_prueba = (
-        pd.DataFrame(_filas_prueba)
-        .sort_values("ROC AUC", ascending=False)
-        .reset_index(drop=True)
-    )
-    print(f"Reporte de clasificación del modelo seleccionado ({mejor_modelo_nombre}):\n")
-    print(
-        classification_report(
-            y_prueba, predicciones_prueba[mejor_modelo_nombre], target_names=["no", "sí"]
-        )
-    )
-    resultados_prueba.round(4)
+    resultados_prueba = pd.DataFrame(_filas_prueba).sort_values("ROC AUC", ascending=False).reset_index(drop=True)
+    print(f"Reporte de clasificación ({mejor_modelo_nombre}):\n")
+    print(classification_report(y_prueba, predicciones_prueba[mejor_modelo_nombre], target_names=["no", "sí"]))
+    resultados_prueba.round(3)
     return modelos_ajustados, predicciones_prueba, probabilidades_prueba, resultados_prueba
 
 
@@ -955,209 +906,160 @@ def _(
 def _(
     ConfusionMatrixDisplay,
     X_prueba,
-    average_precision_score,
+    mejor_modelo_nombre,
     modelos_ajustados,
     plt,
-    precision_recall_curve,
     probabilidades_prueba,
-    resultados_prueba,
     roc_auc_score,
     roc_curve,
     y_prueba,
 ):
-    _paleta = ["#1D4E89", "#00B2CA", "#F79256", "#7DCFB6"]
-    _fig_curvas, _axes_curvas = plt.subplots(1, 2, figsize=(13, 5))
-    for (_nombre, _prob), _color in zip(probabilidades_prueba.items(), _paleta):
+    _fig, _axes = plt.subplots(1, 2, figsize=(11.5, 4.5))
+    for _nombre, _prob in probabilidades_prueba.items():
         _fpr, _tpr, _ = roc_curve(y_prueba, _prob)
-        _axes_curvas[0].plot(
-            _fpr, _tpr, label=f"{_nombre} (AUC = {roc_auc_score(y_prueba, _prob):.3f})", color=_color, linewidth=2
-        )
-        _prec, _rec, _ = precision_recall_curve(y_prueba, _prob)
-        _axes_curvas[1].plot(
-            _rec, _prec, label=f"{_nombre} (AP = {average_precision_score(y_prueba, _prob):.3f})", color=_color, linewidth=2
-        )
+        _auc = roc_auc_score(y_prueba, _prob)
+        _axes[0].plot(_fpr, _tpr, label=f"{_nombre} (AUC = {_auc:.3f})", linewidth=2)
+    _axes[0].plot([0, 1], [0, 1], "k--", label="Azar (AUC = 0.500)")
+    _axes[0].set_title("Curvas ROC en el conjunto de prueba")
+    _axes[0].set_xlabel("Tasa de Falsos Positivos")
+    _axes[0].set_ylabel("Sensibilidad (Verdaderos Positivos)")
+    _axes[0].legend(loc="lower right", fontsize=8.5)
 
-    _axes_curvas[0].plot([0, 1], [0, 1], "k--", linewidth=1, label="Azar (AUC = 0.500)")
-    _axes_curvas[0].set_title("Curvas ROC en el conjunto de prueba")
-    _axes_curvas[0].set_xlabel("Tasa de Falsos Positivos")
-    _axes_curvas[0].set_ylabel("Sensibilidad (TPR)")
-    _axes_curvas[0].legend(loc="lower right", fontsize=8.5)
-
-    _tasa_base = float(y_prueba.mean())
-    _axes_curvas[1].axhline(_tasa_base, color="black", linestyle="--", linewidth=1, label=f"Base ({_tasa_base:.3f})")
-    _axes_curvas[1].set_title("Curvas Precisión-Sensibilidad en prueba")
-    _axes_curvas[1].set_xlabel("Sensibilidad (Recall)")
-    _axes_curvas[1].set_ylabel("Precisión (Precision)")
-    _axes_curvas[1].legend(loc="upper right", fontsize=8.5)
-    _fig_curvas.tight_layout()
-
-    _fig_cm, _axes_cm = plt.subplots(2, 2, figsize=(10.5, 8))
-    for _ax, (_nombre, _pipe) in zip(_axes_cm.flat, modelos_ajustados.items()):
-        ConfusionMatrixDisplay.from_estimator(
-            _pipe, X_prueba, y_prueba, display_labels=["No", "Sí"], cmap="Blues", colorbar=False, ax=_ax
-        )
-        _ax.grid(False)
-        _auc = resultados_prueba.loc[resultados_prueba["Modelo"] == _nombre, "ROC AUC"].iloc[0]
-        _ax.set_title(f"{_nombre} (ROC AUC = {_auc:.3f})")
-    _fig_cm.suptitle("Matrices de confusión en el conjunto de prueba", y=1.01, fontsize=13)
-    _fig_cm.tight_layout()
+    ConfusionMatrixDisplay.from_estimator(
+        modelos_ajustados[mejor_modelo_nombre],
+        X_prueba,
+        y_prueba,
+        display_labels=["No", "Sí"],
+        cmap="Blues",
+        colorbar=False,
+        ax=_axes[1],
+    )
+    _axes[1].grid(False)
+    _axes[1].set_title(f"Matriz de confusión - {mejor_modelo_nombre}")
+    _axes[1].set_xlabel("Predicción")
+    _axes[1].set_ylabel("Valor real")
+    _fig.tight_layout()
     plt.show()
     return
 
 
 @app.cell
 def _(
-    X_prueba,
+    columnas_categoricas,
+    columnas_numericas,
     mejor_modelo_nombre,
     modelos_ajustados,
     np,
     pd,
-    permutation_importance,
     plt,
     probabilidades_prueba,
     y_prueba,
 ):
-    # Importancia de variables por permutación del modelo ganador en CV
-    _perm = permutation_importance(
-        modelos_ajustados[mejor_modelo_nombre],
-        X_prueba,
-        y_prueba,
-        scoring="roc_auc",
-        n_repeats=10,
-        random_state=42,
-        n_jobs=-1,
-    )
-    importancia_variables = (
-        pd.DataFrame(
-            {
-                "variable": X_prueba.columns,
-                "importancia_media": _perm.importances_mean,
-                "importancia_std": _perm.importances_std,
-            }
-        )
-        .sort_values("importancia_media", ascending=False)
+    # Importancia de variables del mejor modelo (Random Forest)
+    _mejor_pipe = modelos_ajustados[mejor_modelo_nombre]
+    _prep_fit = _mejor_pipe.named_steps["prep"]
+    _clf_fit = _mejor_pipe.named_steps["clf"]
+
+    _nombres_num = _prep_fit.named_transformers_["numericas"].named_steps["seleccion_pearson"].get_feature_names_out(columnas_numericas)
+    _onehot_names = _prep_fit.named_transformers_["categoricas"].named_steps["preparacion"].named_steps["codificacion"].get_feature_names_out(columnas_categoricas)
+    _nombres_cat = _prep_fit.named_transformers_["categoricas"].named_steps["seleccion_chi2"].get_feature_names_out(_onehot_names)
+    _nombres_todos = list(_nombres_num) + list(_nombres_cat)
+
+    importancia = (
+        pd.DataFrame({"variable": _nombres_todos, "importancia": _clf_fit.feature_importances_})
+        .sort_values("importancia", ascending=False)
         .reset_index(drop=True)
     )
 
-    _top10 = importancia_variables.head(10)
-    _fig_imp, _ax_imp = plt.subplots(figsize=(9, 4.8))
-    _ax_imp.barh(
-        _top10["variable"][::-1],
-        _top10["importancia_media"][::-1],
-        xerr=_top10["importancia_std"][::-1],
-        color="#1D4E89",
-        capsize=3,
-    )
-    _ax_imp.set_title(f"Top 10 variables más influyentes ({mejor_modelo_nombre})")
-    _ax_imp.set_xlabel("Caída promedio en ROC AUC al permutar la variable")
-    _fig_imp.tight_layout()
-
-    # Curva de Ganancia Acumulada y tabla por deciles para priorización de llamadas
-    _df_eval = pd.DataFrame(
+    # Priorización de llamadas en prueba (Top 10%, 20%, 30%, 50%, 100%)
+    _df_ord = pd.DataFrame(
         {"y": y_prueba.to_numpy(), "prob": probabilidades_prueba[mejor_modelo_nombre]}
     ).sort_values("prob", ascending=False).reset_index(drop=True)
-    _n_total = len(_df_eval)
-    _total_pos = int(_df_eval["y"].sum())
-    _tasa_base = _total_pos / _n_total
+    _total_si = int(_df_ord["y"].sum())
+    _tasa_base = _total_si / len(_df_ord)
 
-    _filas_deciles = []
-    for _decil in range(1, 11):
-        _corte = int(np.ceil(_n_total * _decil / 10))
-        _sub = _df_eval.iloc[:_corte]
-        _pos = int(_sub["y"].sum())
-        _tasa = _pos / len(_sub)
-        _filas_deciles.append(
+    _filas_prio = []
+    for _pct in [10, 20, 30, 50, 100]:
+        _corte = int(np.ceil(len(_df_ord) * _pct / 100))
+        _sub = _df_ord.iloc[:_corte]
+        _si = int(_sub["y"].sum())
+        _tasa = _si / len(_sub)
+        _filas_prio.append(
             {
-                "Decil": f"Top {_decil * 10}%",
-                "Clientes contactados": len(_sub),
-                "Suscriptores capturados": _pos,
-                "Tasa conversión (%)": round(_tasa * 100, 2),
-                "Ganancia acumulada (%)": round(_pos / _total_pos * 100, 2),
-                "Lift": round(_tasa / _tasa_base, 2),
+                "Grupo": f"Top {_pct}%" if _pct < 100 else "Todos (100%)",
+                "Llamadas": len(_sub),
+                "Suscriptores": _si,
+                "Tasa de éxito (%)": round(_tasa * 100, 1),
+                "% del total capturado": round(_si / _total_si * 100, 1),
+                "Mejora vs azar": round(_tasa / _tasa_base, 2),
             }
         )
-    tabla_deciles = pd.DataFrame(_filas_deciles)
+    tabla_priorizacion = pd.DataFrame(_filas_prio)
 
-    _pct = np.arange(0, 101, 10)
-    _gan = [0.0] + tabla_deciles["Ganancia acumulada (%)"].tolist()
-    _fig_gain, _axes_gain = plt.subplots(1, 2, figsize=(13, 4.6))
-    _axes_gain[0].plot(_pct, _gan, marker="o", linewidth=2, color="#1D4E89", label=mejor_modelo_nombre)
-    _axes_gain[0].plot([0, 100], [0, 100], "k--", label="Llamadas al azar")
-    _axes_gain[0].set_title("Curva de Ganancia Acumulada (Priorización)")
-    _axes_gain[0].set_xlabel("% de clientes contactados")
-    _axes_gain[0].set_ylabel("% de suscriptores reales capturados")
-    _axes_gain[0].legend(loc="lower right")
+    _fig, _axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    _top10 = importancia.head(10)
+    _axes[0].barh(_top10["variable"][::-1], _top10["importancia"][::-1], color="#219ebc")
+    _axes[0].set_title(f"Top 10 variables más importantes ({mejor_modelo_nombre})")
+    _axes[0].set_xlabel("Importancia")
 
-    _axes_gain[1].bar(tabla_deciles["Decil"], tabla_deciles["Lift"], color="#00B2CA")
-    _axes_gain[1].axhline(1.0, color="#E76F51", linestyle="--", label="Azar (1.0x)")
-    _axes_gain[1].set_title(f"Factor Lift acumulado por decil ({mejor_modelo_nombre})")
-    _axes_gain[1].set_ylabel("Lift")
-    _axes_gain[1].tick_params(axis="x", rotation=45)
-    _axes_gain[1].legend()
-    _fig_gain.tight_layout()
+    _grupos = tabla_priorizacion.iloc[:-1]
+    _axes[1].bar(_grupos["Grupo"], _grupos["Tasa de éxito (%)"], color="#8ecae6", label=mejor_modelo_nombre)
+    _axes[1].axhline(_tasa_base * 100, color="red", linestyle="--", label=f"Sin modelo ({_tasa_base*100:.1f}%)")
+    _axes[1].set_title("Tasa de suscripción al priorizar llamadas")
+    _axes[1].set_ylabel("Clientes que contratan (%)")
+    for _i, _v in enumerate(_grupos["Tasa de éxito (%)"]):
+        _axes[1].text(_i, _v + 1.2, f"{_v:.1f}%", ha="center", fontsize=9)
+    _axes[1].set_ylim(0, max(_grupos["Tasa de éxito (%)"]) * 1.2)
+    _axes[1].legend(fontsize=8.5)
+    _fig.tight_layout()
     plt.show()
 
-    tabla_deciles
-    return importancia_variables, tabla_deciles
+    tabla_priorizacion
+    return importancia, tabla_priorizacion
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 10. Interpretación, análisis y conclusiones
+    ## 10. Conclusiones
     """)
     return
 
 
 @app.cell(hide_code=True)
 def _(
-    importancia_variables,
     mejor_modelo_nombre,
     mo,
     ranking_chi2,
     ranking_pearson,
     resultados_prueba,
     resultados_validacion,
-    tabla_deciles,
+    tabla_priorizacion,
 ):
     variables_chi = ", ".join(ranking_chi2.head(3)["variable"])
     variables_pearson = ", ".join(ranking_pearson.head(3)["variable"])
-    top_imp = ", ".join(importancia_variables.head(4)["variable"])
     fila_cv = resultados_validacion.loc[resultados_validacion["Modelo"] == mejor_modelo_nombre].iloc[0]
     fila_test = resultados_prueba.loc[resultados_prueba["Modelo"] == mejor_modelo_nombre].iloc[0]
-    dec10 = tabla_deciles.iloc[0]
-    dec30 = tabla_deciles.iloc[2]
+    p10 = tabla_priorizacion.iloc[0]
+    p30 = tabla_priorizacion.iloc[2]
 
     mo.md(
         f"""
-        ### Conclusiones del proyecto
+        ### Conclusión del proyecto
 
-        1. **Preprocesamiento e ingeniería de características:** Se limpiaron formatos de texto, se
-           verificó la ausencia de duplicados exactos, se conservaron los valores extremos reales y
-           se excluyó deliberadamente `duration` para evitar fuga de información. Además, se crearon
-           `presion_contacto` y `balance_ajustado_credito`. Los filtros destacaron **{variables_chi}**
-           en categóricas y **{variables_pearson}** en numéricas.
-
-        2. **Comparación de métodos de clasificación:** En validación cruzada estratificada (5 particiones),
-           **{mejor_modelo_nombre}** obtuvo el mejor desempeño (ROC AUC = **{fila_cv['ROC AUC']:.3f}**,
-           PR AUC = **{fila_cv['PR AUC']:.3f}**, F1 = **{fila_cv['F1']:.3f}**), superando a la Regresión
-           Logística y al Árbol de Decisión individual. En el conjunto de prueba independiente mantuvo un
-           desempeño consistente (ROC AUC = **{fila_test['ROC AUC']:.3f}**, PR AUC = **{fila_test['PR AUC']:.3f}**,
-           Exactitud balanceada = **{fila_test['Exactitud balanceada']:.3f}**), confirmando buena
-           capacidad de generalización sin sobreajuste.
-
-        3. **Interpretación y relación con el objetivo de priorización:** Las variables más influyentes
-           por permutación fueron **{top_imp}**, lo que confirma la relevancia de la estacionalidad, el
-           historial previo y la situación crediticia del cliente. Al ordenar la cartera de prueba por
-           probabilidad estimada, contactar únicamente al **Top 10%** logra una tasa de conversión del
-           **{dec10['Tasa conversión (%)']:.1f}%** (factor **Lift = {dec10['Lift']:.2f}x** frente al azar)
-           y captura el **{dec10['Ganancia acumulada (%)']:.1f}%** de los suscriptores; contactar al
-           **Top 30%** captura el **{dec30['Ganancia acumulada (%)']:.1f}%** ahorrando el 70% de llamadas.
-
-        4. **Cumplimiento del objetivo y pasos futuros:** El objetivo de estimar la contratación de un
-           depósito a plazo fijo para priorizar campañas telefónicas se cumple de forma rigurosa. Como
-           mejora futura se recomienda calibrar el umbral de corte según el costo por llamada y el
-           beneficio económico de cada depósito captado.
+        - **Preprocesamiento:** Se limpiaron formatos de texto, se verificó que no había duplicados
+          exactos, se excluyó `duration` para evitar fuga de información y se crearon dos variables nuevas
+          (`presion_contacto` y `balance_ajustado_credito`). Los filtros destacaron **{variables_chi}**
+          en categóricas y **{variables_pearson}** en numéricas.
+        - **Mejor modelo:** Entre los tres modelos probados, **{mejor_modelo_nombre}** dio el mejor
+          resultado tanto en validación cruzada (ROC AUC = **{fila_cv['ROC AUC']:.3f}**, F1 = **{fila_cv['F1']:.3f}**)
+          como en prueba (ROC AUC = **{fila_test['ROC AUC']:.3f}**, Exactitud balanceada = **{fila_test['Exactitud balanceada']:.3f}**,
+          F1 = **{fila_test['F1']:.3f}**), superando a la Regresión Logística y al Árbol de Decisión.
+        - **Aplicación a campañas telefónicas:** Al ordenar a los clientes por la probabilidad estimada,
+          llamar solo al **Top 10%** sube la tasa de éxito de 11.7% a **{p10['Tasa de éxito (%)']:.1f}%**
+          (**{p10['Mejora vs azar']:.2f}x** mejor que al azar) y captura el **{p10['% del total capturado']:.1f}%**
+          de los suscriptores. Si se contacta al **Top 30%**, se captura el **{p30['% del total capturado']:.1f}%**
+          ahorrando el 70% de llamadas.
         """
     )
     return

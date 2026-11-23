@@ -1,7 +1,7 @@
 """
-Genera el informe editable en Word (Informe_Bank_Marketing.docx) con todas las
-etapas KDD, las 6 secciones requeridas, tablas de métricas reales, las 8 figuras
-incrustadas y la justificación del modelo y decisión óptima.
+Genera el documento Word (Informe_Bank_Marketing.docx) con redacción clara y
+natural estilo proyecto universitario de Minería de Datos, cubriendo las 6
+etapas KDD, los 6 apartados solicitados y las 6 gráficas principales.
 """
 
 from __future__ import annotations
@@ -21,10 +21,9 @@ OUT = ROOT / "Informe_Bank_Marketing.docx"
 METRICS_JSON = ROOT / "outputs" / "metricas_resumen.json"
 FIG_DIR = ROOT / "outputs" / "figuras"
 
-BLUE = "1D4E89"
-LIGHT_BLUE = "EAF2F8"
-HIGHLIGHT = "D6EAF8"
-BORDER = "CBD5E1"
+HEADER_BG = "2B547E"
+ROW_ALT = "F2F6FA"
+BORDER = "CCCCCC"
 
 
 def shade(cell, fill: str) -> None:
@@ -34,7 +33,7 @@ def shade(cell, fill: str) -> None:
     tc_pr.append(shd)
 
 
-def cell_border(cell, color: str = BORDER) -> None:
+def set_borders(cell) -> None:
     tc_pr = cell._tc.get_or_add_tcPr()
     borders = tc_pr.first_child_found_in("w:tcBorders")
     if borders is None:
@@ -42,478 +41,380 @@ def cell_border(cell, color: str = BORDER) -> None:
         tc_pr.append(borders)
     for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
         tag = f"w:{edge}"
-        element = borders.find(qn(tag))
-        if element is None:
-            element = OxmlElement(tag)
-            borders.append(element)
-        element.set(qn("w:val"), "single")
-        element.set(qn("w:sz"), "4")
-        element.set(qn("w:color"), color)
+        el = borders.find(qn(tag))
+        if el is None:
+            el = OxmlElement(tag)
+            borders.append(el)
+        el.set(qn("w:val"), "single")
+        el.set(qn("w:sz"), "4")
+        el.set(qn("w:color"), BORDER)
 
 
-def set_cell_text(cell, text, bold: bool = False, color: str | None = None, size: float = 8.5) -> None:
-    cell.text = ""
-    p = cell.paragraphs[0]
-    p.paragraph_format.space_after = Pt(1)
-    p.paragraph_format.space_before = Pt(1)
-    r = p.add_run(str(text))
-    r.bold = bold
-    r.font.size = Pt(size)
-    if color:
-        r.font.color.rgb = RGBColor.from_string(color)
-    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    cell_border(cell)
-
-
-def add_table(doc: Document, headers: list[str], rows: list[list], widths: list[float] | None = None, font_size: float = 8.5, highlight_row: int | None = None):
+def add_table(doc: Document, headers: list[str], rows: list[list], widths: list[float] | None = None, size: float = 9):
     t = doc.add_table(rows=1, cols=len(headers))
     t.style = "Table Grid"
     t.autofit = False
-    for i, header in enumerate(headers):
-        cell = t.rows[0].cells[i]
-        set_cell_text(cell, header, bold=True, color="FFFFFF", size=font_size)
-        shade(cell, BLUE)
+    for i, h in enumerate(headers):
+        c = t.rows[0].cells[i]
+        c.text = ""
+        p = c.paragraphs[0]
+        p.paragraph_format.space_after = Pt(1)
+        r = p.add_run(h)
+        r.bold = True
+        r.font.size = Pt(size)
+        r.font.color.rgb = RGBColor(255, 255, 255)
+        shade(c, HEADER_BG)
+        set_borders(c)
+        c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
         if widths:
-            cell.width = Inches(widths[i])
-    for row_idx, row in enumerate(rows):
+            c.width = Inches(widths[i])
+    for idx, row in enumerate(rows):
         cells = t.add_row().cells
-        is_hl = highlight_row is not None and row_idx == highlight_row
         for i, val in enumerate(row):
-            set_cell_text(cells[i], val, bold=(is_hl or i == 0), size=font_size)
-            if is_hl:
-                shade(cells[i], HIGHLIGHT)
-            elif row_idx % 2 == 1:
-                shade(cells[i], LIGHT_BLUE)
+            c = cells[i]
+            c.text = ""
+            p = c.paragraphs[0]
+            p.paragraph_format.space_after = Pt(1)
+            r = p.add_run(str(val))
+            r.font.size = Pt(size)
+            if idx % 2 == 1:
+                shade(c, ROW_ALT)
+            set_borders(c)
+            c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
             if widths:
-                cells[i].width = Inches(widths[i])
-    spacer = doc.add_paragraph()
-    spacer.paragraph_format.space_after = Pt(3)
-    return t
+                c.width = Inches(widths[i])
+    doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
 
-def add_heading(doc: Document, text: str, level: int = 1):
-    p = doc.add_paragraph(style=f"Heading {level}")
-    p.paragraph_format.space_before = Pt(12 if level == 1 else 8)
+def add_title_h1(doc: Document, text: str):
+    p = doc.add_paragraph(style="Heading 1")
+    p.paragraph_format.space_before = Pt(12)
     p.paragraph_format.space_after = Pt(4)
     r = p.add_run(text)
-    r.font.color.rgb = RGBColor.from_string(BLUE if level == 1 else "0F172A")
-    return p
+    r.font.color.rgb = RGBColor.from_string(HEADER_BG)
 
 
-def add_paragraph(doc: Document, text: str, bold_lead: str | None = None):
+def add_title_h2(doc: Document, text: str):
+    p = doc.add_paragraph(style="Heading 2")
+    p.paragraph_format.space_before = Pt(8)
+    p.paragraph_format.space_after = Pt(3)
+    r = p.add_run(text)
+    r.font.color.rgb = RGBColor(30, 30, 30)
+
+
+def add_p(doc: Document, text: str, bold_start: str | None = None):
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    p.paragraph_format.space_after = Pt(5)
-    p.paragraph_format.line_spacing = 1.12
-    if bold_lead:
-        r = p.add_run(bold_lead)
-        r.bold = True
+    p.paragraph_format.space_after = Pt(6)
+    p.paragraph_format.line_spacing = 1.15
+    if bold_start:
+        rb = p.add_run(bold_start)
+        rb.bold = True
     p.add_run(text)
-    return p
 
 
-def add_bullet(doc: Document, bold_lead: str, text: str):
+def add_bullet(doc: Document, bold_start: str, text: str):
     p = doc.add_paragraph(style="List Bullet")
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    p.paragraph_format.space_after = Pt(3.5)
-    p.paragraph_format.line_spacing = 1.1
-    r = p.add_run(bold_lead)
-    r.bold = True
-    p.add_run(text)
-    return p
-
-
-def add_callout(doc: Document, title_text: str, body_text: str):
-    t = doc.add_table(rows=1, cols=1)
-    t.autofit = False
-    cell = t.rows[0].cells[0]
-    cell.width = Inches(6.9)
-    shade(cell, LIGHT_BLUE)
-    cell_border(cell, BLUE)
-    p = cell.paragraphs[0]
-    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    p.paragraph_format.space_before = Pt(4)
     p.paragraph_format.space_after = Pt(4)
-    r1 = p.add_run(title_text)
-    r1.bold = True
-    r1.font.size = Pt(10)
-    r1.font.color.rgb = RGBColor.from_string(BLUE)
-    r2 = p.add_run(body_text)
-    r2.font.size = Pt(10)
-    spacer = doc.add_paragraph()
-    spacer.paragraph_format.space_after = Pt(3)
+    p.paragraph_format.line_spacing = 1.12
+    rb = p.add_run(bold_start)
+    rb.bold = True
+    p.add_run(text)
 
 
-def add_figure(doc: Document, filename: str, caption: str, width_in: float = 6.3):
-    img_path = FIG_DIR / filename
-    p_img = doc.add_paragraph()
-    p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_img.paragraph_format.space_before = Pt(4)
-    p_img.paragraph_format.space_after = Pt(2)
-    p_img.paragraph_format.keep_with_next = True
-    p_img.add_run().add_picture(str(img_path), width=Inches(width_in))
+def add_fig(doc: Document, fname: str, caption: str, width: float = 6.0):
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_before = Pt(4)
+    p.paragraph_format.space_after = Pt(2)
+    p.paragraph_format.keep_with_next = True
+    p.add_run().add_picture(str(FIG_DIR / fname), width=Inches(width))
 
-    p_cap = doc.add_paragraph()
-    p_cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_cap.paragraph_format.space_after = Pt(8)
-    r = p_cap.add_run(caption)
-    r.italic = True
-    r.font.size = Pt(8.8)
-    r.font.color.rgb = RGBColor.from_string("475569")
+    pc = doc.add_paragraph()
+    pc.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    pc.paragraph_format.space_after = Pt(8)
+    rc = pc.add_run(caption)
+    rc.italic = True
+    rc.font.size = Pt(9)
+    rc.font.color.rgb = RGBColor(90, 90, 90)
 
 
 def build() -> None:
     m = json.loads(METRICS_JSON.read_text(encoding="utf-8"))
-    best_name = m["mejor_modelo"]
-    best_cv = next(r for r in m["cv"] if r["Modelo"] == best_name)
-    best_test = next(r for r in m["test"] if r["Modelo"] == best_name)
-    dec10 = m["deciles"][0]
-    dec30 = m["deciles"][2]
-    top_vars = ", ".join(r["variable"] for r in m["importancia_top5"][:5])
+    mejor = m["mejor_modelo"]
+    cv_mejor = next(r for r in m["cv"] if r["Modelo"] == mejor)
+    test_mejor = next(r for r in m["test"] if r["Modelo"] == mejor)
+    p10 = m["priorizacion"][0]
+    p20 = m["priorizacion"][1]
+    p30 = m["priorizacion"][2]
 
     doc = Document()
-    section = doc.sections[0]
-    section.top_margin = Inches(0.75)
-    section.bottom_margin = Inches(0.75)
-    section.left_margin = Inches(0.8)
-    section.right_margin = Inches(0.8)
+    sec = doc.sections[0]
+    sec.top_margin = Inches(0.85)
+    sec.bottom_margin = Inches(0.85)
+    sec.left_margin = Inches(0.9)
+    sec.right_margin = Inches(0.9)
 
     normal = doc.styles["Normal"]
-    normal.font.name = "Calibri"
+    normal.font.name = "Arial"
     normal.font.size = Pt(10.5)
-    normal.font.color.rgb = RGBColor.from_string("1F2937")
 
-    # Encabezado editable del estudiante
-    tag = doc.add_paragraph()
-    tag.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    tag.paragraph_format.space_after = Pt(4)
-    r_tag = tag.add_run("MINERÍA DE DATOS (DATA MINING) · PROYECTO APLICADO")
-    r_tag.bold = True
-    r_tag.font.size = Pt(9.5)
-    r_tag.font.color.rgb = RGBColor.from_string(BLUE)
+    # Portada sencilla editable
+    p_tit = doc.add_paragraph()
+    p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_tit.paragraph_format.space_after = Pt(4)
+    r_tit = p_tit.add_run("Proyecto de Minería de Datos: Bank Marketing")
+    r_tit.bold = True
+    r_tit.font.size = Pt(16)
+    r_tit.font.color.rgb = RGBColor.from_string(HEADER_BG)
 
-    title = doc.add_paragraph()
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title.paragraph_format.space_after = Pt(6)
-    r_title = title.add_run(
-        "Predicción de Suscripción a Depósitos a Plazo Fijo para la Priorización de Campañas Telefónicas"
-    )
-    r_title.bold = True
-    r_title.font.size = Pt(17)
-    r_title.font.color.rgb = RGBColor.from_string("0F172A")
-
-    sub = doc.add_paragraph()
-    sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    sub.paragraph_format.space_after = Pt(10)
-    r_sub = sub.add_run(
-        "Análisis exploratorio, preprocesamiento reproducible, selección de características y comparación de modelos sobre UCI Bank Marketing"
-    )
+    p_sub = doc.add_paragraph()
+    p_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_sub.paragraph_format.space_after = Pt(10)
+    r_sub = p_sub.add_run("Predicción de contratación de depósitos a plazo fijo para priorizar campañas telefónicas")
     r_sub.italic = True
-    r_sub.font.size = Pt(10.5)
-    r_sub.font.color.rgb = RGBColor.from_string("475569")
+    r_sub.font.size = Pt(11)
 
-    # Tabla editable de datos del alumno
     add_table(
         doc,
-        ["Estudiante / Equipo", "Materia", "Profesor(a)", "Fecha"],
-        [["[Escribe tu nombre aquí]", "Minería de Datos (Data Mining)", "[Nombre del profesor]", "[Fecha]"]],
-        widths=[2.1, 1.9, 1.8, 1.1],
-        font_size=8.8,
+        ["Alumno(s)", "Materia", "Profesor", "Fecha"],
+        [["[Tu nombre aquí]", "Minería de Datos", "[Nombre del profesor]", "[Fecha]"]],
+        widths=[2.0, 1.6, 1.9, 1.2],
+        size=9,
     )
 
     # 1. Objetivo del proyecto
-    add_heading(doc, "1. Objetivo del proyecto", level=1)
-    add_paragraph(
+    add_title_h1(doc, "1. Objetivo del proyecto")
+    add_p(
         doc,
-        "Las campañas de marketing telefónico representan un costo operativo importante para las instituciones financieras debido al tiempo de los agentes, los múltiples intentos de contacto y la fatiga que las llamadas repetidas generan en los clientes. Contactar clientes sin un criterio de priorización produce tasas de conversión bajas y desperdicia recursos comerciales.",
+        "En las campañas de marketing telefónico de un banco, llamar a todos los clientes cuesta tiempo y dinero, y muchas veces la mayoría de las personas rechazan la oferta. Si se logra saber antes de marcar qué clientes tienen más probabilidad de aceptar un depósito a plazo fijo, el equipo de ventas puede llamar primero a esas personas y aprovechar mejor sus recursos.",
     )
-    add_callout(
+    add_p(
         doc,
-        "Objetivo principal: ",
-        "Estimar la probabilidad de que un cliente contrate un depósito a plazo fijo utilizando únicamente información disponible antes de realizar la llamada, con el fin de priorizar campañas telefónicas y concentrar el esfuerzo comercial en los clientes con mayor propensión a suscribirse.",
+        "Estimar si un cliente contratará un depósito a plazo fijo utilizando los datos disponibles antes de realizar la llamada, para así priorizar las campañas telefónicas.",
+        bold_start="Objetivo: ",
     )
-    add_paragraph(
+    add_p(
         doc,
-        "Para cumplir este objetivo se ejecutó el proceso completo de Descubrimiento de Conocimiento en Bases de Datos (KDD): definición del objetivo, selección de datos, limpieza de datos, transformación e ingeniería de características, minería de datos (comparación de cuatro algoritmos de clasificación supervisada con validación cruzada estratificada) y evaluación e interpretación enfocada tanto en métricas de clasificación como en ganancia acumulada (Lift) para la toma de decisiones comerciales.",
+        "Para lograrlo se siguieron las etapas del proceso de Minería de Datos (KDD): definición del objetivo, selección de datos, limpieza, transformación, aplicación de modelos de clasificación, y evaluación e interpretación de resultados.",
     )
 
     # 2. Descripción del conjunto de datos
-    add_heading(doc, "2. Descripción del conjunto de datos", level=1)
-    add_paragraph(
+    add_title_h1(doc, "2. Descripción del conjunto de datos")
+    add_p(
         doc,
-        f"Se utilizó el conjunto de datos público Bank Marketing del repositorio UCI Machine Learning Repository (ID 222), recopilado a partir de campañas de marketing directo vía telefónica de una institución bancaria portuguesa. El conjunto cuenta con {m['n_total']:,} registros, 16 variables predictoras (7 numéricas y 9 categóricas) y una variable objetivo binaria (y) que indica si el cliente suscribió (yes) o no (no) el depósito a plazo fijo.",
+        f"Se trabajó con el dataset Bank Marketing obtenido del repositorio UCI Machine Learning (ID 222), el cual recopila llamadas telefónicas de campañas de marketing de un banco en Portugal. Tiene {m['n_total']:,} registros y 16 variables predictoras (7 numéricas y 9 categóricas), además de la variable objetivo y, que indica si el cliente contrató el depósito (yes) o no (no).",
     )
-    add_paragraph(
+    add_p(
         doc,
-        f"Un aspecto crítico del conjunto es su desbalance de clases: únicamente el {m['positivos_pct']:.2f}% de los clientes suscribieron el depósito, mientras que el {100 - m['positivos_pct']:.2f}% restante no aceptó la oferta. Esto implica que métricas ingenuas como la exactitud global pueden resultar engañosas, por lo que se emplean particiones estratificadas, ponderación balanceada de clases y métricas sensibles a la clase minoritaria.",
+        f"Un detalle importante que se observó desde el inicio es que los datos están desbalanceados: solo el {m['positivos_pct']:.1f}% de los clientes dijeron que sí, mientras que el {100 - m['positivos_pct']:.1f}% dijeron que no. Por eso no basta con mirar la exactitud (accuracy) normal, sino que hay que usar particiones estratificadas y métricas que tomen en cuenta la clase minoritaria.",
     )
 
     add_table(
         doc,
-        ["Variable", "Tipo", "Descripción y rol en el análisis"],
+        ["Variable", "Tipo", "Qué representa"],
         [
             ["age", "Numérica", "Edad del cliente en años."],
-            ["job", "Categórica", "Ocupación del cliente (11 categorías; 288 valores faltantes)."],
+            ["job", "Categórica", "Trabajo u ocupación (288 datos faltantes)."],
             ["marital", "Categórica", "Estado civil (married, single, divorced)."],
-            ["education", "Categórica", "Nivel educativo (primary, secondary, tertiary; 1,857 faltantes)."],
-            ["default", "Binaria", "Indica si el cliente tiene crédito en mora (yes/no)."],
-            ["balance", "Numérica", "Saldo anual promedio del cliente en euros."],
-            ["housing, loan", "Binarias", "Indican si el cliente posee crédito hipotecario o préstamo personal."],
-            ["contact", "Categórica", "Canal de contacto (cellular, telephone; 13,020 faltantes)."],
-            ["day_of_week, month", "Num. / Cat.", "Día del mes y mes del último contacto de la campaña actual."],
-            ["duration", "Numérica", "Duración de la llamada en segundos. Excluida por fuga de datos (solo se conoce al finalizar la llamada)."],
-            ["campaign", "Numérica", "Número de contactos realizados al cliente durante la campaña actual."],
-            ["pdays, previous", "Numéricas", "Días desde el contacto previo (-1 = sin contacto previo) y número de contactos anteriores."],
-            ["poutcome", "Categórica", "Resultado de la campaña anterior (success, failure, other; 36,959 faltantes)."],
-            ["y (Objetivo)", "Binaria", "Suscripción al depósito a plazo fijo (1 = sí, 0 = no)."],
+            ["education", "Categórica", "Nivel de estudios (1,857 datos faltantes)."],
+            ["default", "Categórica", "Si el cliente tiene crédito en mora (yes/no)."],
+            ["balance", "Numérica", "Saldo anual promedio en euros."],
+            ["housing / loan", "Categóricas", "Si tiene crédito hipotecario o préstamo personal."],
+            ["contact", "Categórica", "Medio de contacto: celular o teléfono fijo (13,020 faltantes)."],
+            ["day_of_week / month", "Num. / Cat.", "Día del mes y mes del último contacto."],
+            ["duration", "Numérica", "Duración de la llamada en segundos (se excluyó del modelo)."],
+            ["campaign", "Numérica", "Número de llamadas hechas al cliente en esta campaña."],
+            ["pdays / previous", "Numéricas", "Días desde el contacto anterior (-1 si nunca se le llamó) y llamadas previas."],
+            ["poutcome", "Categórica", "Resultado de la campaña anterior (36,959 faltantes)."],
+            ["y", "Objetivo", "Si contrató el depósito a plazo fijo (yes = 1, no = 0)."],
         ],
-        widths=[1.45, 0.95, 4.5],
-        font_size=8.3,
+        widths=[1.5, 1.0, 4.2],
+        size=8.5,
     )
 
-    add_figure(
+    add_fig(
         doc,
-        "01_exploracion_objetivo.png",
-        "Figura 1. Distribución desbalanceada de la variable objetivo y tasas de suscripción según resultado previo (poutcome) y mes de contacto.",
-        width_in=6.5,
+        "01_distribucion_y.png",
+        "Figura 1. Distribución de la variable objetivo (y) y tasa de suscripción según el resultado de la campaña previa.",
+        width=5.9,
     )
 
-    # 3. Metodología (Proceso KDD)
-    add_heading(doc, "3. Metodología (Proceso KDD)", level=1)
-    add_paragraph(
+    # 3. Metodología
+    add_title_h1(doc, "3. Metodología")
+    add_title_h2(doc, "3.1 Selección y limpieza de datos")
+    add_bullet(
         doc,
-        "El flujo de trabajo sigue de forma trazable las fases del proceso KDD: Definición del objetivo (Sección 1), Selección de datos, Limpieza de datos, Transformación de datos, Minería de datos y Evaluación e interpretación (Secciones 4 y 5).",
+        "Exclusión de duration (Selección): ",
+        "La duración de la llamada solo se conoce hasta que la llamada ya terminó. Si la dejáramos en el modelo, los resultados saldrían artificialmente altos pero el modelo no serviría en la práctica para decidir a quién llamar antes de marcar.",
+    )
+    add_bullet(
+        doc,
+        "Duplicados y texto (Limpieza): ",
+        f"Se revisó si había filas repetidas exactas y el resultado fue {m['duplicados']}. También se quitaron espacios extra y se pasaron los textos a minúsculas para evitar categorías duplicadas.",
+    )
+    add_bullet(
+        doc,
+        "Valores faltantes y códigos especiales: ",
+        "En lugar de borrar las filas con datos faltantes en job, education, contact y poutcome (lo cual eliminaría más del 80% de los datos), se imputaron con la moda dentro del pipeline. El valor -1 en pdays se dejó tal cual porque significa que el cliente no había sido contactado antes.",
+    )
+    add_bullet(
+        doc,
+        "Valores atípicos: ",
+        "Al revisar los diagramas de caja (Figura 2) se vieron valores extremos en balance, campaign, pdays y previous. No se eliminaron porque en un banco sí existen clientes con mucho saldo o varias llamadas; mejor se conservan y se escalan.",
     )
 
-    add_heading(doc, "3.1 Selección y limpieza de datos", level=2)
-    add_bullet(
+    add_fig(
         doc,
-        "Selección de datos: ",
-        "Se seleccionaron los 45,211 registros del repositorio UCI y se excluyó deliberadamente la variable duration por fuga de información, ya que solo se conoce después de efectuar la llamada y no puede utilizarse para priorizar a quién contactar.",
-    )
-    add_bullet(
-        doc,
-        "Duplicados y consistencia de texto: ",
-        f"Se verificó la existencia de {m['n_duplicados']} filas duplicadas exactas y se normalizaron espacios y minúsculas en las variables categóricas. Todos los valores observados se ajustaron al dominio documentado.",
-    )
-    add_bullet(
-        doc,
-        "Faltantes y códigos especiales: ",
-        "Los valores faltantes en job (288), education (1,857), contact (13,020) y poutcome (36,959) no se eliminaron para no perder más del 80% de la muestra; se imputaron con la moda dentro del pipeline. El valor pdays = -1 se conservó porque representa ausencia de contacto previo.",
-    )
-    add_bullet(
-        doc,
-        "Valores atípicos (IQR): ",
-        "Mediante diagramas de caja e IQR se detectaron valores extremos en balance, campaign, pdays y previous. Se conservaron por corresponder a clientes reales (saldos altos o historiales largos) y se normalizaron con MinMaxScaler.",
+        "02_boxplots.png",
+        "Figura 2. Diagramas de caja para revisar la distribución y valores extremos de las variables numéricas.",
+        width=5.9,
     )
 
-    add_figure(
+    add_title_h2(doc, "3.2 Transformación de datos y selección de características")
+    add_p(
         doc,
-        "02_diagnostico_atipicos.png",
-        "Figura 2. Diagnóstico visual de distribución y valores atípicos mediante criterio IQR en las variables numéricas originales.",
-        width_in=6.3,
+        "Antes de entrenar los modelos se crearon dos variables nuevas a partir de las que ya existían (ambas conocidas antes de llamar): presion_contacto = campaign / (previous + 1), para ver qué tanto se ha insistido en esta campaña comparado con el historial, y balance_ajustado_credito = balance / (1 + housing + loan), para aproximar el saldo disponible tomando en cuenta si el cliente tiene créditos activos.",
+    )
+    add_p(
+        doc,
+        f"Después se dividió el conjunto de forma estratificada en 80% entrenamiento ({m['n_train']:,} filas) y 20% prueba ({m['n_test']:,} filas). Dentro de un Pipeline de scikit-learn se imputaron numéricas con la mediana y se escalaron con MinMaxScaler, y las categóricas se imputaron con la moda y se codificaron con OneHotEncoder. También se aplicaron filtros de selección dentro del pipeline: Chi-cuadrada para variables categóricas y correlación de Pearson para numéricas.",
     )
 
-    add_heading(doc, "3.2 Transformación de datos y Minería de Datos", level=2)
-    add_bullet(
+    add_title_h2(doc, "3.3 Minería de Datos (métodos implementados)")
+    add_p(
         doc,
-        "Transformación e ingeniería de características: ",
-        "Se crearon dos variables derivadas disponibles antes de la llamada: presion_contacto = campaign / (previous + 1) (mide la insistencia reciente frente al historial) y balance_ajustado_credito = balance / (1 + housing + loan) (aproxima la capacidad financiera ajustada por créditos activos). Las numéricas se imputaron con mediana y se escalaron con MinMaxScaler; las categóricas se imputaron con moda y se codificaron con OneHotEncoder dentro de un Pipeline sin fuga de datos.",
+        "Para no quedarnos con un solo algoritmo, se probaron y compararon tres modelos clásicos de clasificación supervisada vistos en clase, usando class_weight='balanced' en todos para compensar el desbalance de la variable objetivo y validación cruzada estratificada de 5 particiones:",
     )
-    add_bullet(
-        doc,
-        "Partición y selección de características: ",
-        f"Se realizó una partición estratificada 80% entrenamiento ({m['n_train']:,} registros) y 20% prueba independiente ({m['n_test']:,} registros). Dentro de cada pliegue de entrenamiento se aplicó Chi-cuadrada (top 25 indicadores categóricos) y correlación de Pearson (top 6 numéricas).",
-    )
-    add_paragraph(
-        doc,
-        "En la fase de Minería de Datos se implementaron y compararon cuatro algoritmos de clasificación supervisada, todos con class_weight='balanced' y evaluados mediante validación cruzada estratificada de 5 particiones (5-Fold Stratified CV):",
-    )
-    add_bullet(doc, "Regresión Logística: ", "Modelo lineal base, rápido e interpretable que estima directamente probabilidades de suscripción.")
-    add_bullet(doc, "Árbol de Decisión (max_depth=8, min_samples_leaf=50): ", "Modelo no lineal basado en reglas de decisión controladas para evitar sobreajuste.")
-    add_bullet(doc, "Bosque Aleatorio (Random Forest, 200 árboles, max_depth=12): ", "Ensamble tipo bagging que reduce varianza y captura interacciones no lineales.")
-    add_bullet(doc, "Gradient Boosting (HistGradientBoosting, 150 iteraciones, lr=0.05, max_depth=6): ", "Ensamble secuencial tipo boosting altamente eficaz en datos tabulares.")
+    add_bullet(doc, "Regresión Logística: ", "Es un modelo lineal sencillo y fácil de interpretar, útil como punto de partida.")
+    add_bullet(doc, "Árbol de Decisión: ", "Divide los datos con reglas de decisión (se limitó la profundidad máxima a 6 para evitar sobreajuste).")
+    add_bullet(doc, "Random Forest (Bosque Aleatorio): ", "Combina 150 árboles de decisión entrenados con distintas muestras para mejorar la estabilidad y captar relaciones no lineales.")
 
     # 4. Resultados
-    add_heading(doc, "4. Resultados", level=1)
-    add_heading(doc, "4.1 Selección de características por filtros", level=2)
-    add_paragraph(
+    add_title_h1(doc, "4. Resultados")
+    add_p(
         doc,
-        f"El filtro Chi-cuadrada mostró que poutcome (V de Cramér = {m['ranking_chi2'][0]['v_cramer']:.3f}), month (V = {m['ranking_chi2'][1]['v_cramer']:.3f}) y housing (V = {m['ranking_chi2'][2]['v_cramer']:.3f}) concentran las asociaciones categóricas más fuertes. En variables numéricas, Pearson destacó {m['ranking_pearson'][0]['variable']} (r = {m['ranking_pearson'][0]['correlacion']:.3f}), {m['ranking_pearson'][1]['variable']} (r = {m['ranking_pearson'][1]['correlacion']:.3f}) y {m['ranking_pearson'][2]['variable']} (r = {m['ranking_pearson'][2]['correlacion']:.3f}).",
+        f"En los filtros de selección sobre entrenamiento (Figura 3), las variables categóricas con mayor relación con la suscripción fueron poutcome (V de Cramér = {m['ranking_chi2'][0]['v_cramer']:.3f}), month ({m['ranking_chi2'][1]['v_cramer']:.3f}) y housing ({m['ranking_chi2'][2]['v_cramer']:.3f}). Entre las numéricas destacaron {m['ranking_pearson'][0]['variable']} (r = {m['ranking_pearson'][0]['correlacion']:.3f}), {m['ranking_pearson'][1]['variable']} (r = {m['ranking_pearson'][1]['correlacion']:.3f}) y {m['ranking_pearson'][2]['variable']} (r = {m['ranking_pearson'][2]['correlacion']:.3f}).",
     )
-    add_figure(
+    add_fig(
         doc,
-        "03_filtros_seleccion.png",
-        "Figura 3. Ranking de asociación frente a la variable objetivo mediante Chi-cuadrada (V de Cramér) y correlación de Pearson en entrenamiento.",
-        width_in=6.5,
+        "03_filtros.png",
+        "Figura 3. Resultados de los filtros de selección Chi-cuadrada (categóricas) y Pearson (numéricas).",
+        width=6.0,
     )
 
-    add_heading(doc, "4.2 Comparación de modelos en validación cruzada y conjunto de prueba", level=2)
-    cv_rows = [
-        [
-            r["Modelo"],
-            f"{r['ROC AUC']:.4f} ± {r['ROC AUC std']:.4f}",
-            f"{r['PR AUC']:.4f}",
-            f"{r['Exactitud Balanceada']:.4f}",
-            f"{r['F1']:.4f}",
-            f"{r['Precisión']:.4f}",
-            f"{r['Sensibilidad']:.4f}",
-        ]
-        for r in m["cv"]
-    ]
-    hl_cv = next(i for i, r in enumerate(m["cv"]) if r["Modelo"] == best_name)
+    add_p(doc, "En la siguiente tabla y en la Figura 4 se muestran los resultados promedio de la validación cruzada de 5 particiones para los tres modelos:")
     add_table(
         doc,
-        ["Modelo (CV 5-Fold)", "ROC AUC", "PR AUC", "Exact. Bal.", "F1", "Precisión", "Sensibilidad"],
-        cv_rows,
-        widths=[1.6, 1.35, 0.75, 0.85, 0.7, 0.8, 0.85],
-        font_size=8.3,
-        highlight_row=hl_cv,
+        ["Modelo (Validación cruzada)", "ROC AUC", "Exact. Balanceada", "F1", "Precisión", "Sensibilidad"],
+        [
+            [r["Modelo"], f"{r['ROC AUC']:.3f} (±{r['ROC AUC std']:.3f})", f"{r['Exactitud Balanceada']:.3f}", f"{r['F1']:.3f}", f"{r['Precisión']:.3f}", f"{r['Sensibilidad']:.3f}"]
+            for r in m["cv"]
+        ],
+        widths=[1.75, 1.25, 1.15, 0.8, 0.85, 0.9],
+        size=8.8,
     )
-    add_figure(
+    add_fig(
         doc,
-        "04_comparacion_cv.png",
-        "Figura 4. Comparación de métricas promedio de los cuatro modelos en validación cruzada estratificada de 5 particiones.",
-        width_in=6.3,
+        "04_comparacion_modelos.png",
+        "Figura 4. Comparación del desempeño de los tres modelos en validación cruzada.",
+        width=5.8,
     )
 
-    add_paragraph(
-        doc,
-        f"Con base estricta en la validación cruzada, {best_name} obtuvo el mejor desempeño global (ROC AUC = {best_cv['ROC AUC']:.4f}, PR AUC = {best_cv['PR AUC']:.4f}, F1 = {best_cv['F1']:.4f}). Al evaluar los modelos entrenados sobre el conjunto de prueba independiente (9,043 clientes no vistos), se confirmó su estabilidad sin sobreajuste:",
-    )
-    test_rows = [
-        [
-            r["Modelo"],
-            f"{r['ROC AUC']:.4f}",
-            f"{r['PR AUC']:.4f}",
-            f"{r['Exactitud']:.4f}",
-            f"{r['Exactitud Balanceada']:.4f}",
-            f"{r['F1']:.4f}",
-            f"{r['Precisión']:.4f}",
-            f"{r['Sensibilidad']:.4f}",
-        ]
-        for r in m["test"]
-    ]
-    hl_test = next(i for i, r in enumerate(m["test"]) if r["Modelo"] == best_name)
+    add_p(doc, "Al evaluar los modelos entrenados en el conjunto de prueba independiente (9,043 clientes que los modelos nunca vieron), se obtuvieron las siguientes métricas:")
     add_table(
         doc,
-        ["Modelo (Prueba)", "ROC AUC", "PR AUC", "Exactitud", "Exact. Bal.", "F1", "Precisión", "Sensibilidad"],
-        test_rows,
-        widths=[1.5, 0.75, 0.72, 0.78, 0.82, 0.7, 0.8, 0.83],
-        font_size=8.2,
-        highlight_row=hl_test,
+        ["Modelo (Conjunto de prueba)", "ROC AUC", "Exactitud", "Exact. Balanceada", "F1", "Precisión", "Sensibilidad"],
+        [
+            [r["Modelo"], f"{r['ROC AUC']:.3f}", f"{r['Exactitud']:.3f}", f"{r['Exactitud Balanceada']:.3f}", f"{r['F1']:.3f}", f"{r['Precisión']:.3f}", f"{r['Sensibilidad']:.3f}"]
+            for r in m["test"]
+        ],
+        widths=[1.65, 0.8, 0.8, 1.05, 0.75, 0.8, 0.85],
+        size=8.6,
     )
-
-    add_figure(
+    add_fig(
         doc,
-        "05_curvas_roc_pr.png",
-        "Figura 5. Curvas ROC y Precisión-Sensibilidad comparativas de los cuatro modelos sobre el conjunto de prueba independiente.",
-        width_in=6.5,
-    )
-    add_figure(
-        doc,
-        "06_matrices_confusion.png",
-        "Figura 6. Matrices de confusión de los cuatro clasificadores en el conjunto de prueba (n = 9,043).",
-        width_in=5.8,
+        "05_roc_y_confusion.png",
+        f"Figura 5. Curvas ROC comparativas en prueba y matriz de confusión del mejor modelo ({mejor}).",
+        width=6.1,
     )
 
     # 5. Interpretación y análisis
-    add_heading(doc, "5. Interpretación y análisis", level=1)
-    add_heading(doc, "5.1 Variables determinantes e interpretación del modelo", level=2)
-    add_paragraph(
+    add_title_h1(doc, "5. Interpretación y análisis")
+    add_title_h2(doc, "5.1 ¿Por qué Random Forest fue el mejor modelo?")
+    add_p(
         doc,
-        f"Para explicar qué atributos impulsan las predicciones de {best_name} se calculó la importancia por permutación (Permutation Importance) sobre el conjunto de prueba. Las cinco variables más influyentes fueron: {top_vars}. Destaca especialmente que balance_ajustado_credito (creada durante la ingeniería de características) aparece en el cuarto lugar de importancia, confirmando que relacionar el saldo con la carga crediticia aporta señal predictiva relevante.",
+        f"De los tres algoritmos evaluados, {mejor} obtuvo los mejores resultados tanto en validación cruzada (ROC AUC = {cv_mejor['ROC AUC']:.3f}, F1 = {cv_mejor['F1']:.3f}) como en el conjunto de prueba (ROC AUC = {test_mejor['ROC AUC']:.3f}, Exactitud balanceada = {test_mejor['Exactitud Balanceada']:.3f}, F1 = {test_mejor['F1']:.3f}).",
     )
-    add_figure(
+    arbol_test = next(r for r in m["test"] if r["Modelo"] == "Árbol de Decisión")
+    add_p(
         doc,
-        "07_importancia_variables.png",
-        f"Figura 7. Top 10 de variables más influyentes en {best_name} según la caída promedio en ROC AUC al permutar cada atributo.",
-        width_in=6.0,
+        f"La razón es que la Regresión Logística solo busca relaciones lineales entre las variables y el resultado, por lo que le cuesta captar combinaciones de factores; mientras que un solo Árbol de Decisión es más inestable y dio el ROC AUC más bajo ({arbol_test['ROC AUC']:.3f}) y menor sensibilidad ({arbol_test['Sensibilidad']:.3f}). En cambio, Random Forest promedia muchos árboles distintos, lo que reduce errores y logra separar mejor a los clientes que sí contratan sin sobreajustar (sus métricas en validación cruzada y prueba son muy parecidas).",
     )
-    add_bullet(doc, "Estacionalidad (month): ", "Los meses con menor volumen masivo de llamadas (marzo, septiembre, octubre y diciembre) presentan tasas de conversión muy superiores al promedio de 11.7%.")
-    add_bullet(doc, "Situación crediticia y saldo (housing, balance_ajustado_credito): ", "Los clientes sin hipoteca activa y con mayor liquidez relativa muestran mayor disposición a contratar un depósito a plazo fijo.")
-    add_bullet(doc, "Historial previo (poutcome, pdays): ", "Quienes ya aceptaron una oferta en campañas anteriores presentan la tasa de conversión más elevada (64.7%), convirtiéndose en el segmento prioritario natural.")
 
-    add_heading(doc, "5.2 Relación con el objetivo: priorización de campañas telefónicas", level=2)
-    add_paragraph(
+    add_title_h2(doc, "5.2 Variables importantes y aplicación a la priorización de llamadas")
+    add_p(
         doc,
-        f"Aunque la precisión en el umbral estándar de 0.50 es moderada ({best_test['Precisión']*100:.1f}%) debido al desbalance de clases y a la exclusión realista de duration, la verdadera utilidad operativa del modelo está en ordenar a los clientes por probabilidad estimada de suscripción. La tabla de deciles y la Figura 8 cuantifican el impacto directo sobre los 9,043 clientes de prueba (1,058 suscriptores reales):",
+        "Al revisar la importancia de variables del Random Forest (Figura 6, izquierda), se observa que los factores que más influyen en la predicción son el resultado de campañas anteriores (poutcome_success), el historial de contacto (pdays, presion_contacto), la situación financiera (housing, balance y la variable creada balance_ajustado_credito) y el mes de la llamada.",
     )
-    dec_rows = [
-        [
-            r["decil"],
-            f"{r['clientes_contactados']:,}",
-            f"{r['suscriptores_capturados']:,}",
-            f"{r['tasa_conversion_pct']:.2f}%",
-            f"{r['ganancia_acumulada_pct']:.2f}%",
-            f"{r['lift']:.2f}x",
-        ]
-        for r in (m["deciles"][:5] + [m["deciles"][-1]])
-    ]
-    dec_rows[-1][0] = "Top 100% (Sin filtro)"
+    add_p(
+        doc,
+        "Para comprobar si el modelo realmente cumple con el objetivo de priorizar campañas telefónicas, ordenamos a los 9,043 clientes de prueba de mayor a menor según la probabilidad que calculó Random Forest y revisamos cuántos clientes contratan si solo llamamos a los mejores porcentajes:",
+    )
+
     add_table(
         doc,
-        ["Segmento priorizado", "Clientes contactados", "Suscriptores capturados", "Tasa de conversión", "Ganancia acumulada", "Factor Lift"],
-        dec_rows,
-        widths=[1.45, 1.15, 1.25, 1.1, 1.1, 0.85],
-        font_size=8.4,
-        highlight_row=0,
+        ["Grupo de clientes contactados", "Llamadas", "Suscriptores logrados", "Tasa de éxito", "% del total capturado", "Mejora vs azar"],
+        [
+            [r["grupo"], f"{r['llamadas']:,}", f"{r['suscriptores']:,}", f"{r['tasa_exito_pct']:.1f}%", f"{r['captura_total_pct']:.1f}%", f"{r['mejora_vs_azar']:.2f}x"]
+            for r in m["priorizacion"]
+        ],
+        widths=[1.75, 0.85, 1.2, 0.95, 1.1, 0.85],
+        size=8.6,
     )
-    add_figure(
+    add_fig(
         doc,
-        "08_ganancia_lift_campana.png",
-        f"Figura 8. Curva de ganancia acumulada y factor Lift por deciles usando {best_name} para priorizar llamadas frente a una estrategia aleatoria.",
-        width_in=6.5,
+        "06_importancia_y_priorizacion.png",
+        "Figura 6. Variables más importantes del Random Forest y tasa de suscripción obtenida al priorizar llamadas.",
+        width=6.1,
     )
-
-    add_heading(doc, "5.3 Justificación del modelo óptimo y decisión recomendada", level=2)
-    add_bullet(
+    add_p(
         doc,
-        f"¿Por qué {best_name} es el modelo óptimo? ",
-        f"Fue seleccionado estrictamente en validación cruzada (sin usar prueba para decidir) al liderar ROC AUC ({best_cv['ROC AUC']:.4f}), PR AUC ({best_cv['PR AUC']:.4f}), Exactitud Balanceada ({best_cv['Exactitud Balanceada']:.4f}) y F1 ({best_cv['F1']:.4f}). Aunque en prueba el Bosque Aleatorio empató prácticamente en ROC AUC (0.7651 vs 0.7641), {best_name} lo superó claramente en las métricas críticas bajo desbalance: mayor PR AUC (0.4363 vs 0.4134), mayor F1 (0.4102 vs 0.3877), mayor precisión (31.5% vs 28.7%) y 213 llamadas innecesarias menos (1,349 falsos positivos frente a 1,562 del Bosque Aleatorio, 1,698 de Regresión Logística y 1,864 del Árbol de Decisión).",
-    )
-    add_bullet(
-        doc,
-        "¿Por qué se descartan Regresión Logística y Árbol de Decisión? ",
-        "La Regresión Logística asume relaciones lineales y no captura interacciones entre estacionalidad, historial previo y saldo ajustado; el Árbol de Decisión individual presenta mayor varianza y la menor capacidad discriminativa (ROC AUC = 0.7359).",
-    )
-    add_bullet(
-        doc,
-        "Decisión operativa óptima para el banco: ",
-        f"Utilizar las probabilidades de {best_name} como ranking de priorización. Con presupuesto estricto, contactar solo al Top 10% ({dec10['clientes_contactados']:,} llamadas) maximiza el retorno por llamada ({dec10['tasa_conversion_pct']:.1f}% de conversión, Lift {dec10['lift']:.2f}x y {dec10['ganancia_acumulada_pct']:.1f}% de los suscriptores). Como punto óptimo entre volumen de captación y ahorro de costos, el Top 30% captura el {dec30['ganancia_acumulada_pct']:.1f}% de los suscriptores ahorrando el 70% de llamadas; contactar más allá del 50% entrega rendimientos cercanos al azar.",
+        f"Esto demuestra cuál es la decisión más práctica para el banco: sin modelo, la tasa de éxito al llamar al azar es de 11.7%. Si se usa Random Forest para llamar primero al Top 10% ({p10['llamadas']:,} clientes), la tasa de éxito sube a {p10['tasa_exito_pct']:.1f}% (casi {p10['mejora_vs_azar']:.1f} veces mejor que al azar) y se consigue el {p10['captura_total_pct']:.1f}% de todos los clientes que iban a contratar. Si el banco tiene capacidad para contactar al Top 30%, logra capturar el {p30['captura_total_pct']:.1f}% de los suscriptores ahorrándose el 70% de las llamadas.",
     )
 
     # 6. Conclusiones
-    add_heading(doc, "6. Conclusiones", level=1)
+    add_title_h1(doc, "6. Conclusiones")
     add_bullet(
         doc,
         "Cumplimiento del objetivo: ",
-        "Se desarrolló y validó un flujo completo KDD capaz de estimar la probabilidad de contratación de un depósito a plazo fijo antes de realizar la llamada, demostrando mediante ganancia acumulada y Lift que el modelo prioriza eficazmente las campañas telefónicas.",
+        f"Se logró construir un modelo capaz de estimar la probabilidad de que un cliente contrate un depósito a plazo fijo antes de llamarlo. Al ordenar a los clientes con {mejor}, el banco puede concentrar sus llamadas en el Top 10%–30% y obtener tasas de conversión entre {p30['tasa_exito_pct']:.1f}% y {p10['tasa_exito_pct']:.1f}% en lugar del 11.7% promedio.",
     )
     add_bullet(
         doc,
-        "Superioridad de los ensambles no lineales: ",
-        f"Los ensambles de árboles ({best_name} y Bosque Aleatorio) superaron consistentemente a la Regresión Logística y al Árbol de Decisión individual en todas las métricas relevantes para clases desbalanceadas.",
+        "Importancia del preprocesamiento: ",
+        "Excluir la variable duration evitó resultados engañosos, y meter la imputación, el escalamiento y los filtros dentro de un Pipeline evitó fuga de información entre entrenamiento y prueba. Además, las dos variables creadas (presion_contacto y balance_ajustado_credito) resultaron útiles para el modelo.",
     )
     add_bullet(
         doc,
-        "Rigor metodológico y ausencia de fuga de datos: ",
-        f"Excluir duration, conservar valores atípicos reales, encapsular imputación y filtros dentro de cada partición y validar con 5-Fold estratificado garantizó métricas honestas y consistentes entre validación cruzada ({best_cv['ROC AUC']:.3f}) y prueba ({best_test['ROC AUC']:.3f}).",
+        "Selección del mejor modelo: ",
+        f"Comparar tres algoritmos permitió comprobar que {mejor} supera a la Regresión Logística y al Árbol de Decisión individual en ROC AUC, exactitud balanceada y F1, manteniendo un comportamiento estable en prueba.",
     )
     add_bullet(
         doc,
-        "Recomendaciones futuras: ",
-        "Calibrar el umbral de corte según el costo unitario por llamada y el margen financiero de cada depósito, además de incorporar variables macroeconómicas y validación temporal por fechas completas.",
+        "Trabajo futuro: ",
+        "Como mejora se podría ajustar el umbral de probabilidad según cuánto le cuesta al banco cada llamada y cuánto gana por cada depósito contratado, para definir el corte exacto de llamadas en cada campaña.",
     )
 
-    footer = section.footer.paragraphs[0]
+    footer = sec.footer.paragraphs[0]
     footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r_f = footer.add_run("Minería de Datos (Data Mining) · Bank Marketing - Informe de Proyecto")
-    r_f.font.size = Pt(8)
-    r_f.font.color.rgb = RGBColor.from_string("64748B")
+    rf = footer.add_run("Proyecto de Minería de Datos - Bank Marketing")
+    rf.font.size = Pt(8.5)
+    rf.font.color.rgb = RGBColor(120, 120, 120)
 
     doc.save(OUT)
-    print(f"Documento Word generado exitosamente en: {OUT}")
+    print(f"Word generado correctamente en: {OUT}")
 
 
 if __name__ == "__main__":
