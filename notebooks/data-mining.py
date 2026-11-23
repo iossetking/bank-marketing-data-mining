@@ -222,28 +222,42 @@ def _(datos_brutos, pd):
     )
     duplicados_brutos = int(datos_brutos.duplicated().sum())
     print(f"Filas duplicadas completas: {duplicados_brutos:,}")
+    print(
+        "Registros con pdays = -1 (sin contacto previo): "
+        f"{(datos_brutos['pdays'] == -1).sum():,}"
+    )
     resumen_calidad
     return (duplicados_brutos,)
 
 
 @app.cell
 def _(datos_brutos, pd):
-    # Se inspeccionan faltantes y valores especiales documentados por la fuente.
-    columnas_texto = datos_brutos.select_dtypes(include=["object", "string"]).columns
-    conteo_faltantes_categoricos = pd.DataFrame(
-        {
-            "faltantes": [
-                datos_brutos[col].isna().sum()
-                for col in columnas_texto
-            ]
-        },
-        index=columnas_texto,
-    )
-    print(
-        "Registros con pdays = -1 (sin contacto previo): "
-        f"{(datos_brutos['pdays'] == -1).sum():,}"
-    )
-    conteo_faltantes_categoricos
+    # Se listan los valores únicos de cada variable numérica para detectar códigos especiales
+    # (por ejemplo pdays = -1) y confirmar los rangos antes de graficar los atípicos.
+    # Las variables continuas con cientos de valores se resumen con su rango para no saturar la salida.
+    _maximo_valores_listados = 100
+    _filas_valores = []
+    for _columna in datos_brutos.select_dtypes(include="number").columns:
+        _valores = sorted(datos_brutos[_columna].dropna().unique())
+        if len(_valores) <= _maximo_valores_listados:
+            _detalle = ", ".join(f"{_valor:g}" for _valor in _valores)
+        else:
+            _detalle = (
+                f"{len(_valores):,} valores continuos "
+                f"entre {_valores[0]:g} y {_valores[-1]:g}"
+            )
+        _filas_valores.append(
+            {
+                "variable": _columna,
+                "n_unicos": len(_valores),
+                "minimo": _valores[0],
+                "maximo": _valores[-1],
+                "valores_unicos": _detalle,
+            }
+        )
+    valores_unicos_numericos = pd.DataFrame(_filas_valores).set_index("variable")
+    print("Valores únicos de las variables numéricas:")
+    valores_unicos_numericos
     return
 
 
@@ -285,7 +299,7 @@ def _(datos_brutos, np, pd, plt, sns):
     _fig_atipicos.tight_layout()
     plt.show()
     diagnostico_atipicos
-    return (diagnostico_atipicos,)
+    return
 
 
 @app.cell
@@ -320,7 +334,7 @@ def _(datos_brutos, pd):
         )
     consistencia_categoricas = pd.DataFrame(_filas_consistencia)
     consistencia_categoricas
-    return (consistencia_categoricas,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -391,10 +405,10 @@ def _(mo):
     | `job` | Categórica nominal | Moda y one-hot | No existe un orden natural entre ocupaciones. |
     | `marital` | Categórica nominal | Moda y one-hot | Representa estados sin jerarquía cuantitativa. |
     | `education` | Categórica ordinal aproximada | Moda y one-hot | Evita imponer distancias arbitrarias entre niveles educativos. |
-    | `default` | Categórica binaria | Moda y one-hot | Conserva la interpretación sí/no. |
+    | `default` | Categórica binaria | `yes` a 1 y `no` a 0 | Una sola columna 0/1 conserva el indicador sin duplicarlo en dos columnas colineales. |
     | `balance` | Numérica | Mediana y MinMax | Conserva la señal del saldo en una escala comparable. |
-    | `housing` | Categórica binaria | Moda y one-hot | Conserva el indicador de crédito hipotecario. |
-    | `loan` | Categórica binaria | Moda y one-hot | Conserva el indicador de crédito personal. |
+    | `housing` | Categórica binaria | `yes` a 1 y `no` a 0 | Una sola columna 0/1 conserva el indicador de crédito hipotecario. |
+    | `loan` | Categórica binaria | `yes` a 1 y `no` a 0 | Una sola columna 0/1 conserva el indicador de crédito personal. |
     | `contact` | Categórica nominal | Moda y one-hot | Los canales no tienen orden intrínseco. |
     | `day_of_week` | Numérica discreta | Mediana y MinMax | Mantiene el momento mensual sin crear una jerarquía categórica. |
     | `month` | Categórica temporal | Moda y one-hot | Permite patrones estacionales sin asumir distancia lineal entre meses. |
@@ -416,6 +430,13 @@ def _(datos_limpios):
     # Ambas están disponibles antes de hacer una llamada y no usan la variable objetivo.
     datos_modelo = datos_limpios.copy()
 
+    # Las tres categóricas binarias se codifican a 0/1 (yes = 1, no = 0). Se conservan en el
+    # grupo categórico para que la chi-cuadrada las analice y no se traten como numéricas.
+    for _columna_binaria in ["default", "housing", "loan"]:
+        datos_modelo[_columna_binaria] = (
+            datos_modelo[_columna_binaria].eq("yes").astype(int)
+        )
+
     # Relaciona los contactos de la campaña actual con los de campañas previas.
     # Un valor alto señala insistencia reciente; un valor bajo indica más historial que presión actual.
     datos_modelo["presion_contacto"] = datos_modelo["campaign"] / (
@@ -425,9 +446,7 @@ def _(datos_limpios):
     # Ajusta el saldo por la cantidad de créditos activos reportados (vivienda y personal).
     # Sirve como aproximación de la capacidad financiera disponible para aceptar un depósito.
     datos_modelo["balance_ajustado_credito"] = datos_modelo["balance"] / (
-        1
-        + datos_modelo["housing"].eq("yes").astype(int)
-        + datos_modelo["loan"].eq("yes").astype(int)
+        1 + datos_modelo["housing"] + datos_modelo["loan"]
     )
 
     # Se muestra un ejemplo para comprobar que las dos columnas sí fueron creadas.
@@ -454,11 +473,23 @@ def _(datos_limpios):
     print("Distribución de la respuesta (0 = no, 1 = sí):")
     print(y_modelo.value_counts(normalize=True).rename("proporción").round(4))
     return X_modelo, y_modelo
+
+
 @app.cell
 def _(X_modelo):
     # Se identifican columnas por tipo para aplicar una preparación adecuada a cada grupo.
-    columnas_numericas = X_modelo.select_dtypes(include="number").columns.tolist()
-    columnas_categoricas = X_modelo.select_dtypes(exclude="number").columns.tolist()
+    # default, housing y loan ya están codificadas 0/1, pero siguen siendo categóricas binarias:
+    # se declaran explícitamente para que la chi-cuadrada las analice en lugar de Pearson.
+    columnas_binarias = ["default", "housing", "loan"]
+    columnas_numericas = [
+        columna
+        for columna in X_modelo.select_dtypes(include="number").columns
+        if columna not in columnas_binarias
+    ]
+    columnas_categoricas = [
+        *X_modelo.select_dtypes(exclude="number").columns,
+        *columnas_binarias,
+    ]
     print(f"Variables numéricas: {len(columnas_numericas)}")
     print(f"Variables categóricas: {len(columnas_categoricas)}")
     return columnas_categoricas, columnas_numericas
@@ -476,6 +507,8 @@ def _(
 ):
     # Las numéricas se imputan con mediana y se escalan a [0,1], condición necesaria para chi-cuadrada.
     # Las categóricas se imputan con la moda y se convierten a indicadores mediante one-hot encoding.
+    # drop="if_binary" deja una sola columna 0/1 en las binarias (default, housing, loan, contact)
+    # en lugar de dos columnas colineales que duplicarían la misma información.
     transformador_numerico = Pipeline(
         steps=[
             ("imputacion", SimpleImputer(strategy="median")),
@@ -485,7 +518,14 @@ def _(
     transformador_categorico = Pipeline(
         steps=[
             ("imputacion", SimpleImputer(strategy="most_frequent")),
-            ("codificacion", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+            (
+                "codificacion",
+                OneHotEncoder(
+                    drop="if_binary",
+                    handle_unknown="ignore",
+                    sparse_output=False,
+                ),
+            ),
         ]
     )
     preprocesador = ColumnTransformer(
@@ -495,7 +535,7 @@ def _(
         ],
         remainder="drop",
     )
-    return preprocesador, transformador_categorico, transformador_numerico
+    return transformador_categorico, transformador_numerico
 
 
 @app.cell(hide_code=True)
@@ -550,13 +590,15 @@ def _(mo):
 def _(
     X_entrenamiento,
     chi2_contingency,
+    columnas_categoricas,
     pd,
     plt,
     sns,
     y_entrenamiento,
 ):
     # Método 1: una tabla de contingencia por variable categórica frente a la respuesta.
-    _columnas_categoricas_filtro = X_entrenamiento.select_dtypes(exclude="number").columns
+    # Se usa la lista explícita para incluir las binarias ya codificadas 0/1.
+    _columnas_categoricas_filtro = columnas_categoricas
     _resultados_chi = []
     _tablas_contingencia = {}
     for _columna in _columnas_categoricas_filtro:
@@ -620,9 +662,18 @@ def _(mo, ranking_chi2):
 
 
 @app.cell
-def _(X_entrenamiento, pd, pearsonr, plt, sns, y_entrenamiento):
+def _(
+    X_entrenamiento,
+    columnas_numericas,
+    pd,
+    pearsonr,
+    plt,
+    sns,
+    y_entrenamiento,
+):
     # Método 2: Pearson cuantifica la asociación lineal de cada numérica con y codificada 0/1.
-    _columnas_numericas_filtro = X_entrenamiento.select_dtypes(include="number").columns
+    # La lista explícita excluye las binarias 0/1, que se evalúan con chi-cuadrada.
+    _columnas_numericas_filtro = columnas_numericas
     _resultados_pearson = []
     for _columna in _columnas_numericas_filtro:
         _correlacion, _p_valor = pearsonr(X_entrenamiento[_columna], y_entrenamiento)
@@ -687,7 +738,7 @@ def _(pd, ranking_chi2, ranking_pearson):
     ).sort_values(["metodo", "puntaje"], ascending=[True, False])
     print("Comparación de variables descriptivas frente al objetivo, ordenada dentro de cada filtro:")
     resumen_filtros.round(4)
-    return (resumen_filtros,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -899,7 +950,7 @@ def _(
     print(f"Reporte de clasificación ({mejor_modelo_nombre}):\n")
     print(classification_report(y_prueba, predicciones_prueba[mejor_modelo_nombre], target_names=["no", "sí"]))
     resultados_prueba.round(3)
-    return modelos_ajustados, predicciones_prueba, probabilidades_prueba, resultados_prueba
+    return modelos_ajustados, probabilidades_prueba, resultados_prueba
 
 
 @app.cell
@@ -1015,7 +1066,7 @@ def _(
     plt.show()
 
     tabla_priorizacion
-    return importancia, tabla_priorizacion
+    return (tabla_priorizacion,)
 
 
 @app.cell(hide_code=True)
