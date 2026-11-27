@@ -14,7 +14,9 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # Bank Marketing Data Mining
+    # Proyecto de Minería de Datos: Bank Marketing
+
+    **Predicción de contratación de depósitos a plazo fijo para priorizar campañas telefónicas**
     """)
     return
 
@@ -22,15 +24,13 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Bank Marketing Dataset
+    ## 1. Motivación del trabajo y problemática a abordar
 
-    Dataset sobre campañas de marketing de un banco Portugues. Las campañas de marketing se basan en llamadas telefonicas, cada registro representa un cliente e informacion sobre la campaña de marketing (se puede repetir el cliente debido a que en algunos casos se contactaron varias veces al mismo cliente).
+    En las campañas de marketing telefónico de un banco, contactar a todos los clientes registrados implica un gasto alto de tiempo y dinero para el centro de llamadas (horas de los agentes, costos operativos y múltiples intentos de contacto). Además, marcar sin un filtro previo provoca que la gran mayoría de las personas rechacen la oferta (cerca del 88.3% dicen que no) e incluso genera molestia o fatiga en los clientes por recibir llamadas insistentes.
 
-    UCI Bank Marketing (https://archive.ics.uci.edu/dataset/222/bank+marketing)
+    **Problemática:** El banco necesita saber, **antes de realizar la llamada**, qué clientes tienen mayor probabilidad de aceptar un depósito a plazo fijo para no desperdiciar llamadas al azar.
 
-    - Numero de registros: 45,211
-    - Numero de caracteristicas: 16
-    - Variable ojetivo: `y` (Representa si un cliente se suscribio/contrato o no a un deposito a plazo fijo).
+    **Motivación y objetivo:** Desarrollar, optimizar y evaluar un flujo completo de Minería de Datos (siguiendo las etapas del proceso KDD) con modelos de clasificación supervisada que estimen la probabilidad de suscripción (`y = yes` o `no`) usando únicamente información disponible antes de marcar. Con esto buscamos **priorizar la lista de llamadas** y concentrar el esfuerzo comercial en el segmento de clientes con mayor propensión a contratar.
     """)
     return
 
@@ -38,25 +38,34 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    | Nombre Variable | Descripcion |
-    | --- | --- |
-    | `age` | Edad del cliente, en años. |
-    | `job` | Tipo de trabajo u ocupación: admin., blue-collar, entrepreneur, housemaid, management, retired, self-employed, services, student, technician, unemployed o unknown. |
-    | `marital` | Estado civil: divorced, married, single o unknown. `divorced` también incluye a personas viudas. |
-    | `education` | Nivel educativo: primary, secondary o tertiary; algunos registros no lo reportan. |
-    | `default` | Indica si el cliente tiene crédito en mora (yes/no). |
-    | `balance` | Saldo anual promedio del cliente, en euros. |
-    | `housing` | Indica si el cliente tiene un préstamo hipotecario (yes/no). |
-    | `loan` | Indica si el cliente tiene un préstamo personal (yes/no). |
-    | `contact` | Tipo de medio de contacto: telephone o cellular; algunos registros no lo reportan. |
-    | `day_of_week` | Día del mes del último contacto de esta campaña (nombre conservado de la fuente). |
-    | `month` | Mes del último contacto de esta campaña (jan–dec). |
-    | `duration` | Duración del último contacto, en segundos. |
-    | `campaign` | Número de contactos realizados durante esta campaña para este cliente, incluido el último contacto. |
-    | `pdays` | Días desde el último contacto del cliente en una campaña anterior; `-1` indica que no había sido contactado anteriormente. |
-    | `previous` | Número de contactos realizados para este cliente antes de esta campaña. |
-    | `poutcome` | Resultado de la campaña anterior: other, failure o success; los faltantes indican que no se registró resultado previo. |
-    | `y` | Variable objetivo: indica si el cliente suscribió un depósito a plazo fijo (yes/no). |
+    ## 2. Justificación de la selección de la base de datos
+
+    Para abordar esta problemática elegimos el dataset **Bank Marketing** del repositorio público **UCI Machine Learning Repository (ID 222)** (https://archive.ics.uci.edu/dataset/222/bank+marketing), el cual recopila datos reales de campañas telefónicas de una institución bancaria de Portugal.
+
+    **¿Por qué elegimos esta base de datos?**
+    1. **Datos reales y tamaño suficiente:** Cuenta con **45,211 registros** y **16 variables predictoras** (7 numéricas y 9 categóricas) más la variable objetivo `y`, lo que nos da una muestra grande y representativa para entrenar, hacer validación cruzada y reservar un conjunto de prueba independiente sin quedarnos cortos de datos.
+    2. **Combinación rica de variables de negocio:** Incluye tanto el perfil socioeconómico del cliente (`age`, `job`, `marital`, `education`, `balance`, `default`, `housing`, `loan`) como el contexto de la campaña actual y el historial de campañas previas (`contact`, `day_of_week`, `month`, `campaign`, `pdays`, `previous`, `poutcome`).
+    3. **Retos reales de Minería de Datos:** No es un dataset "de juguete"; presenta problemas reales que vimos en clase y que nos obligan a justificar decisiones técnicas: **desbalance de clases** (solo el 11.7% contrata), **valores faltantes** en variables categóricas, **códigos especiales** (`pdays = -1`), **valores extremos reales** en saldos y llamadas, y una variable con **fuga de información** (`duration`) que debemos detectar y excluir.
+
+    | Nombre Variable | Tipo | Descripción |
+    | --- | --- | --- |
+    | `age` | Numérica | Edad del cliente, en años. |
+    | `job` | Categórica | Tipo de trabajo u ocupación (11 categorías; algunos registros faltantes). |
+    | `marital` | Categórica | Estado civil: `divorced`, `married`, `single`. |
+    | `education` | Categórica | Nivel educativo: `primary`, `secondary` o `tertiary` (algunos faltantes). |
+    | `default` | Categórica binaria | Indica si el cliente tiene crédito en mora (`yes`/`no`). |
+    | `balance` | Numérica | Saldo anual promedio del cliente, en euros. |
+    | `housing` | Categórica binaria | Indica si el cliente tiene un préstamo hipotecario (`yes`/`no`). |
+    | `loan` | Categórica binaria | Indica si el cliente tiene un préstamo personal (`yes`/`no`). |
+    | `contact` | Categórica | Medio de contacto: `telephone` o `cellular` (algunos faltantes). |
+    | `day_of_week` | Numérica | Día del mes del último contacto de esta campaña. |
+    | `month` | Categórica | Mes del último contacto de esta campaña (`jan`–`dec`). |
+    | `duration` | Numérica | Duración del último contacto en segundos (**se excluye por fuga de datos**). |
+    | `campaign` | Numérica | Número de contactos realizados durante esta campaña para este cliente. |
+    | `pdays` | Numérica | Días desde el último contacto en una campaña anterior (`-1` = sin contacto previo). |
+    | `previous` | Numérica | Número de contactos realizados para este cliente antes de esta campaña. |
+    | `poutcome` | Categórica | Resultado de la campaña anterior: `other`, `failure` o `success` (faltantes = sin registro previo). |
+    | `y` | Objetivo binario | Indica si el cliente suscribió un depósito a plazo fijo (`yes`/`no`). |
     """)
     return
 
@@ -64,26 +73,14 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Planeamiento del Problema
-
-    El banco realiza campañas de marketing telefónico para ofrecer depósitos a plazo fijo. Como contactar a los clientes requiere recursos y, en algunos casos, varios intentos, es útil identificar de antemano cuáles tienen mayor probabilidad de aceptar la oferta. El problema consiste en utilizar la información de los clientes y de las campañas anteriores para predecir si un cliente suscribirá el depósito, resultado representado por la variable y (yes o no).
-
-    **Objetivo**: Desarrollar y evaluar un modelo de clasificación que, utilizando las variables disponibles del conjunto de datos Bank Marketing, prediga si un cliente suscribirá un depósito a plazo fijo.
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 0. Importacion de Librerias
+    ## 0. Importación de Librerías
     """)
     return
 
 
 @app.cell
 def _():
-    # Se importan las librerías para manipular datos, graficar y entrenar los modelos.
+    # Se importan las librerías para manipular datos, graficar, seleccionar variables y entrenar/optimizar los modelos.
     from pathlib import Path
     import matplotlib.pyplot as plt
     import numpy as np
@@ -99,13 +96,19 @@ def _():
         accuracy_score,
         balanced_accuracy_score,
         classification_report,
+        confusion_matrix,
         f1_score,
         precision_score,
         recall_score,
         roc_auc_score,
         roc_curve,
     )
-    from sklearn.model_selection import StratifiedKFold, cross_validate, train_test_split
+    from sklearn.model_selection import (
+        GridSearchCV,
+        StratifiedKFold,
+        cross_validate,
+        train_test_split,
+    )
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
     from sklearn.tree import DecisionTreeClassifier
@@ -116,6 +119,7 @@ def _():
         ColumnTransformer,
         ConfusionMatrixDisplay,
         DecisionTreeClassifier,
+        GridSearchCV,
         LogisticRegression,
         MinMaxScaler,
         OneHotEncoder,
@@ -130,6 +134,7 @@ def _():
         chi2,
         chi2_contingency,
         classification_report,
+        confusion_matrix,
         cross_validate,
         f1_score,
         fetch_ucirepo,
@@ -149,7 +154,7 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 1. Carga de Dataset
+    ## 3. Carga del Dataset
     """)
     return
 
@@ -178,7 +183,7 @@ def _(Path, fetch_ucirepo, pd):
 @app.cell
 def _(X):
     # Se revisa la forma y las primeras filas para confirmar una carga correcta.
-    print(f'X Shape: {X.shape}')
+    print(f"X Shape: {X.shape}")
     X.head()
     return
 
@@ -186,7 +191,7 @@ def _(X):
 @app.cell
 def _(y):
     # Se comprueba que la variable objetivo tenga una sola columna y valores esperados.
-    print(f'y Shape: {y.shape}')
+    print(f"y Shape: {y.shape}")
     y.head()
     return
 
@@ -194,9 +199,9 @@ def _(y):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 2. Diagnostico de Calidad de los Datos
+    ## 4. Diagnóstico de Calidad de los Datos y Preprocesamiento
 
-    Identificar valores faltantes, duplicados, inconsistencias y valores atípicos.
+    Antes de meter los datos a cualquier algoritmo, revisamos valores faltantes, filas duplicadas, consistencia de categorías y valores atípicos (mediante el rango intercuartílico IQR y diagramas de caja).
     """)
     return
 
@@ -234,7 +239,6 @@ def _(datos_brutos, pd):
 def _(datos_brutos, pd):
     # Se listan los valores únicos de cada variable numérica para detectar códigos especiales
     # (por ejemplo pdays = -1) y confirmar los rangos antes de graficar los atípicos.
-    # Las variables continuas con cientos de valores se resumen con su rango para no saturar la salida.
     _maximo_valores_listados = 100
     _filas_valores = []
     for _columna in datos_brutos.select_dtypes(include="number").columns:
@@ -340,51 +344,28 @@ def _(datos_brutos, pd):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    **Interpretación del diagnóstico.** Las marcas IQR y los puntos extremos de los diagramas de caja
-    identifican observaciones que merecen revisión, pero no son por sí mismos errores. En marketing
-    bancario, saldos elevados, muchos contactos o intervalos largos entre campañas pueden describir
-    clientes reales; eliminarlos sin evidencia cambiaría artificialmente la población objetivo. Por
-    ello se conservarán los valores numéricos y se aplicará escalamiento robusto a la escala de cada
-    variable. La tabla de consistencia permite confirmar que, una vez retirados espacios, las
-    categorías están dentro de los dominios documentados. Los faltantes de las categóricas no se
-    eliminan: se imputarán con la moda dentro del pipeline para no perder registros. `pdays = -1`
-    se mantiene porque expresa ausencia de contacto previo y puede ser predictivo.
-    """)
-    return
+    ### 4.1 Justificación de la Limpieza de Datos
 
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 3. Limpieza de Datos
-
-    La limpieza conserva la información de negocio y corrige solamente problemas verificables de formato
-    o duplicación. La siguiente tabla deja trazabilidad de cada decisión antes de ejecutarla.
-
-    | Problema identificado | Variables | Decisión | Justificación |
+    | Problema identificado | Variables | Decisión tomada | Justificación |
     | --- | --- | --- | --- |
-    | Filas duplicadas exactas | Todas | Eliminar solo registros idénticos en todas las columnas | Evita sobreponderar una misma observación sin eliminar llamadas distintas de un cliente. |
-    | Espacios o diferencias de formato | Categóricas y objetivo | Recortar espacios y homogeneizar a minúsculas al evaluar dominios | Previene categorías duplicadas por captura; no altera su significado. |
-    | Faltantes categóricos | `job`, `education`, `contact`, `poutcome` | Imputar con la moda dentro del pipeline | Conserva registros y evita que estadísticos del conjunto de prueba influyan en entrenamiento. |
-    | `pdays = -1` | `pdays` | Conservar el valor | La documentación lo define como ausencia de contacto previo, no como dato faltante. |
-    | Valores atípicos IQR | Numéricas | Conservar y escalar; no truncar | No hay evidencia de error y los extremos pueden ser clientes o campañas reales. |
-    | Faltantes futuros | Numéricas y categóricas | Imputar dentro del pipeline de entrenamiento | Mantiene el flujo reproducible y evita fuga de información. |
+    | Filas duplicadas exactas | Todas | Revisar y eliminar duplicados exactos (`0` encontrados) | Evita darle doble peso a un mismo registro; no borramos clientes con varias llamadas porque cada intento tiene distinto contexto. |
+    | Espacios o mayúsculas/minúsculas | Categóricas y `y` | Recortar espacios (`strip`) y pasar a minúsculas (`lower`) | Evita que el modelo trate la misma categoría como dos distintas por errores de captura. |
+    | Faltantes en categóricas | `job` (288), `education` (1,857), `contact` (13,020), `poutcome` (36,959) | Imputar con la **moda** dentro del `Pipeline` de entrenamiento | Si borráramos las filas con datos faltantes perderíamos más del 80% de la base. Al imputar dentro del pipeline evitamos fuga de datos desde prueba. |
+    | Código especial `-1` | `pdays` | Conservar el valor `-1` | No es un error ni un dato perdido: significa que al cliente nunca se le había llamado en campañas anteriores. |
+    | Valores extremos (atípicos IQR) | `balance`, `campaign`, `pdays`, `previous` | Conservar los registros y escalar con `MinMaxScaler` | En un banco es normal que existan clientes con saldos muy altos o con varios contactos; borrarlos distorsionaría la población real. |
     """)
     return
 
 
 @app.cell
 def _(datos_brutos, duplicados_brutos):
-    # Se eliminan solo duplicados exactos. No se eliminan clientes repetidos porque cada llamada
-    # puede corresponder a un intento distinto y aporta información de campaña.
+    # Se eliminan solo duplicados exactos y se normaliza el formato de las columnas de texto.
     datos_limpios = datos_brutos.drop_duplicates().copy()
 
-    # Se normalizan espacios en variables de texto para evitar categorías duplicadas por formato.
     columnas_texto_limpias = datos_limpios.select_dtypes(include=["object", "string"]).columns
     for _columna in columnas_texto_limpias:
         datos_limpios[_columna] = datos_limpios[_columna].str.strip().str.lower()
 
-    # La imputación posterior queda dentro para no filtrar información del conjunto de prueba.
     print(f"Registros eliminados por duplicado: {duplicados_brutos:,}")
     print(f"Registros disponibles después de limpiar: {len(datos_limpios):,}")
     return (datos_limpios,)
@@ -393,63 +374,39 @@ def _(datos_brutos, duplicados_brutos):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 4. Transformación de Variables y 5. Ingeniería de características
+    ### 4.2 Transformación de Variables e Ingeniería de Características
 
-    Las transformaciones se definen antes de ejecutarse para distinguir los datos disponibles al
-    momento de priorizar una llamada de los datos que solo se conocen después. La imputación, el
-    escalamiento y la codificación se ajustan únicamente dentro del entrenamiento.
-
-    | Variable | Tipo de variable | Transformación propuesta | Justificación |
-    | --- | --- | --- | --- |
-    | `age` | Numérica | Mediana y MinMax | Atenúa el efecto de una escala distinta y mantiene valores no negativos. |
-    | `job` | Categórica nominal | Moda y one-hot | No existe un orden natural entre ocupaciones. |
-    | `marital` | Categórica nominal | Moda y one-hot | Representa estados sin jerarquía cuantitativa. |
-    | `education` | Categórica ordinal aproximada | Moda y one-hot | Evita imponer distancias arbitrarias entre niveles educativos. |
-    | `default` | Categórica binaria | `yes` a 1 y `no` a 0 | Una sola columna 0/1 conserva el indicador sin duplicarlo en dos columnas colineales. |
-    | `balance` | Numérica | Mediana y MinMax | Conserva la señal del saldo en una escala comparable. |
-    | `housing` | Categórica binaria | `yes` a 1 y `no` a 0 | Una sola columna 0/1 conserva el indicador de crédito hipotecario. |
-    | `loan` | Categórica binaria | `yes` a 1 y `no` a 0 | Una sola columna 0/1 conserva el indicador de crédito personal. |
-    | `contact` | Categórica nominal | Moda y one-hot | Los canales no tienen orden intrínseco. |
-    | `day_of_week` | Numérica discreta | Mediana y MinMax | Mantiene el momento mensual sin crear una jerarquía categórica. |
-    | `month` | Categórica temporal | Moda y one-hot | Permite patrones estacionales sin asumir distancia lineal entre meses. |
-    | `duration` | Numérica | Excluir | Solo se conoce al terminar la llamada; incluirla causaría fuga de información. |
-    | `campaign` | Numérica discreta | Mediana y MinMax y derivada | Resume la presión actual de contacto. |
-    | `pdays` | Numérica con código especial | Mediana y MinMax; conservar `-1` | El código identifica explícitamente falta de contacto previo. |
-    | `previous` | Numérica discreta | Mediana y MinMax y derivada | Aporta historial de campañas anteriores. |
-    | `poutcome` | Categórica nominal | Moda y one-hot | El resultado previo puede tener asociación con la suscripción. |
-    | `presion_contacto` | Numérica derivada | `campaign / (previous + 1)` y MinMax | Contrasta insistencia actual con historial previo, sin dividir entre cero. |
-    | `balance_ajustado_credito` | Numérica derivada | `balance / (1 + housing + loan)` y MinMax | Aproxima el saldo disponible considerando créditos reportados. |
-    | `y` | Objetivo binario | `yes` a 1 y `no` a 0 | Permite estimar una probabilidad de suscripción. |
+    Todas las transformaciones se diseñaron pensando en que el modelo debe predecir **antes de hacer la llamada**:
+    1. **Exclusión de `duration` (evitar fuga de datos):** La duración en segundos de la llamada solo se conoce cuando la llamada ya terminó. Si la dejáramos, las métricas subirían artificialmente pero el modelo sería inútil en la vida real para decidir a quién marcar.
+    2. **Creación de dos variables derivadas de negocio:**
+       - `presion_contacto = campaign / (previous + 1)`: Mide qué tanto se le ha insistido al cliente en la campaña actual en comparación con sus contactos anteriores (sumamos 1 en el denominador para evitar divisiones entre cero).
+       - `balance_ajustado_credito = balance / (1 + housing + loan)`: Aproxima la liquidez real del cliente dividiendo su saldo promedio entre la cantidad de créditos activos que tiene (hipoteca y préstamo personal).
+    3. **Codificación y escalamiento sin fuga de información:**
+       - Las categóricas binarias (`default`, `housing`, `loan`) se pasan a `0/1` (`yes = 1`, `no = 0`).
+       - Las numéricas se imputan con la **mediana** (robusta ante valores extremos) y se escalan al rango `[0, 1]` con `MinMaxScaler` para que estén en la misma escala.
+       - Las categóricas se imputan con la **moda** y se codifican con `OneHotEncoder(drop="if_binary", handle_unknown="ignore")` para no inventar un orden numérico falso entre categorías.
     """)
     return
 
 
 @app.cell
 def _(datos_limpios):
-    # Se crean exactamente dos variables derivadas mediante operaciones entre columnas existentes.
-    # Ambas están disponibles antes de hacer una llamada y no usan la variable objetivo.
+    # Se crean dos variables derivadas mediante operaciones entre columnas existentes (conocidas antes de llamar).
     datos_modelo = datos_limpios.copy()
 
-    # Las tres categóricas binarias se codifican a 0/1 (yes = 1, no = 0). Se conservan en el
-    # grupo categórico para que la chi-cuadrada las analice y no se traten como numéricas.
     for _columna_binaria in ["default", "housing", "loan"]:
         datos_modelo[_columna_binaria] = (
             datos_modelo[_columna_binaria].eq("yes").astype(int)
         )
 
-    # Relaciona los contactos de la campaña actual con los de campañas previas.
-    # Un valor alto señala insistencia reciente; un valor bajo indica más historial que presión actual.
     datos_modelo["presion_contacto"] = datos_modelo["campaign"] / (
         datos_modelo["previous"] + 1
     )
 
-    # Ajusta el saldo por la cantidad de créditos activos reportados (vivienda y personal).
-    # Sirve como aproximación de la capacidad financiera disponible para aceptar un depósito.
     datos_modelo["balance_ajustado_credito"] = datos_modelo["balance"] / (
         1 + datos_modelo["housing"] + datos_modelo["loan"]
     )
 
-    # Se muestra un ejemplo para comprobar que las dos columnas sí fueron creadas.
     print("Ejemplo de variables derivadas:")
     print(
         datos_modelo[
@@ -465,8 +422,7 @@ def _(datos_limpios):
         ].head()
     )
 
-    # duration se excluye: se conoce al finalizar la llamada y no estaría disponible
-    # cuando el banco tenga que decidir a quién contactar. Incluirla inflaría el desempeño.
+    # duration se excluye por fuga de información.
     X_modelo = datos_modelo.drop(columns=["y", "duration"])
     y_modelo = (datos_modelo["y"].str.lower() == "yes").astype(int)
 
@@ -477,9 +433,7 @@ def _(datos_limpios):
 
 @app.cell
 def _(X_modelo):
-    # Se identifican columnas por tipo para aplicar una preparación adecuada a cada grupo.
-    # default, housing y loan ya están codificadas 0/1, pero siguen siendo categóricas binarias:
-    # se declaran explícitamente para que la chi-cuadrada las analice en lugar de Pearson.
+    # Se separan columnas numéricas y categóricas (incluyendo las binarias en el grupo categórico para el filtro Chi-cuadrada).
     columnas_binarias = ["default", "housing", "loan"]
     columnas_numericas = [
         columna
@@ -505,10 +459,6 @@ def _(
     columnas_categoricas,
     columnas_numericas,
 ):
-    # Las numéricas se imputan con mediana y se escalan a [0,1], condición necesaria para chi-cuadrada.
-    # Las categóricas se imputan con la moda y se convierten a indicadores mediante one-hot encoding.
-    # drop="if_binary" deja una sola columna 0/1 en las binarias (default, housing, loan, contact)
-    # en lugar de dos columnas colineales que duplicarían la misma información.
     transformador_numerico = Pipeline(
         steps=[
             ("imputacion", SimpleImputer(strategy="median")),
@@ -541,19 +491,15 @@ def _(
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 6. Partición del conjunto de datos en entrenamiento y prueba
+    ## 5. Partición Estratificada en Entrenamiento (80%) y Prueba (20%)
 
-    Se reserva una muestra independiente antes de cualquier filtro. La estratificación mantiene en
-    entrenamiento y prueba la proporción de suscripciones, que es minoritaria, y permite que la
-    evaluación final represente la población original.
+    Dividimos la base antes de calcular cualquier filtro o entrenar modelos. Usamos `stratify=y_modelo` para que tanto entrenamiento como prueba mantengan exactamente el **11.7%** de casos positivos. El conjunto de prueba (9,043 clientes) se guarda hasta el final y **nunca se utiliza durante la selección de variables ni en la búsqueda de hiperparámetros**.
     """)
     return
 
 
 @app.cell
 def _(X_modelo, train_test_split, y_modelo):
-    # Se reserva 20% para una evaluación final independiente. La estratificación conserva
-    # la proporción de suscripciones en ambos subconjuntos, importante por el desbalance.
     X_entrenamiento, X_prueba, y_entrenamiento, y_prueba = train_test_split(
         X_modelo,
         y_modelo,
@@ -569,19 +515,11 @@ def _(X_modelo, train_test_split, y_modelo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 7. Aplicación de métodos de filtro para la selección de características
+    ## 6. Métodos de Filtro para Selección de Características (Chi-cuadrada y Pearson)
 
-    Los filtros se calculan solo sobre entrenamiento. Cada variable descriptiva se contrasta con
-    `y`: chi-cuadrada para categóricas y Pearson para numéricas. Los puntajes miden asociaciones,
-    no causalidad, y sirven para priorizar variables que deben revisarse junto con el contexto de
-    negocio.
-
-    | Criterio | Chi-cuadrada | Pearson |
-    | --- | --- | --- |
-    | Variables analizadas | Categóricas frente al objetivo binario | Numéricas frente al objetivo binario codificado 0/1 |
-    | Evidencia reportada | Estadístico, p-valor y V de Cramér | Correlación `r`, p-valor y valor absoluto de `r` |
-    | Lectura del ranking | Mayor V de Cramér indica asociación categórica más fuerte | Mayor `abs(r)` indica asociación lineal más fuerte |
-    | Comparación entre filtros | No se comparan sus magnitudes directamente: usan escalas distintas. Se comparan las variables relevantes dentro de su propio tipo. | No se comparan sus magnitudes directamente: usan escalas distintas. Se comparan las variables relevantes dentro de su propio tipo. |
+    Calculamos los filtros únicamente sobre el conjunto de entrenamiento:
+    - **Chi-cuadrada y V de Cramér** para medir la asociación entre cada variable categórica y la respuesta `y`.
+    - **Correlación de Pearson (`r`)** para medir la relación lineal entre cada variable numérica y `y`.
     """)
     return
 
@@ -596,8 +534,6 @@ def _(
     sns,
     y_entrenamiento,
 ):
-    # Método 1: una tabla de contingencia por variable categórica frente a la respuesta.
-    # Se usa la lista explícita para incluir las binarias ya codificadas 0/1.
     _columnas_categoricas_filtro = columnas_categoricas
     _resultados_chi = []
     _tablas_contingencia = {}
@@ -605,7 +541,6 @@ def _(
         _tabla = pd.crosstab(X_entrenamiento[_columna], y_entrenamiento)
         _estadistico, _p_valor, _grados_libertad, _ = chi2_contingency(_tabla)
         _n = _tabla.to_numpy().sum()
-        # V de Cramér permite comparar asociaciones con distinta cantidad de categorías.
         _minimo_dimension = min(_tabla.shape) - 1
         _v_cramer = (_estadistico / (_n * _minimo_dimension)) ** 0.5 if _minimo_dimension else 0.0
         _resultados_chi.append(
@@ -645,22 +580,6 @@ def _(
     return (ranking_chi2,)
 
 
-@app.cell(hide_code=True)
-def _(mo, ranking_chi2):
-    principal_chi = ranking_chi2.iloc[0]
-    mo.md(
-        f"""
-        **Interpretación de chi-cuadrada.** `{principal_chi['variable']}` presenta la mayor asociación
-        categórica con la suscripción (V de Cramér = **{principal_chi['v_cramer']:.3f}**; p-valor =
-        **{principal_chi['p_valor']:.3g}**). Las gráficas de contingencia muestran cómo se distribuyen
-        los sí y no dentro de cada categoría. Las variables con p-valor bajo son candidatas a conservar,
-        pero el tamaño de efecto evita confundir un resultado significativo por el gran tamaño muestral
-        con una asociación sustantiva.
-        """
-    )
-    return
-
-
 @app.cell
 def _(
     X_entrenamiento,
@@ -671,8 +590,6 @@ def _(
     sns,
     y_entrenamiento,
 ):
-    # Método 2: Pearson cuantifica la asociación lineal de cada numérica con y codificada 0/1.
-    # La lista explícita excluye las binarias 0/1, que se evalúan con chi-cuadrada.
     _columnas_numericas_filtro = columnas_numericas
     _resultados_pearson = []
     for _columna in _columnas_numericas_filtro:
@@ -711,50 +628,18 @@ def _(
 
 
 @app.cell(hide_code=True)
-def _(mo, ranking_pearson):
-    principal_pearson = ranking_pearson.iloc[0]
-    direccion = "positiva" if principal_pearson["correlacion_pearson"] > 0 else "negativa"
-    mo.md(
-        f"""
-        **Interpretación de Pearson.** `{principal_pearson['variable']}` tiene la mayor asociación lineal
-        absoluta entre las numéricas (r = **{principal_pearson['correlacion_pearson']:.3f}**, asociación
-        {direccion}; p-valor = **{principal_pearson['p_valor']:.3g}**). En la matriz, los tonos cercanos
-        a cero indican relaciones lineales débiles; por ello una variable puede ser útil en un modelo aun
-        si no domina este ranking, especialmente si su efecto depende de otras variables.
-        """
-    )
-    return
-
-
-@app.cell
-def _(pd, ranking_chi2, ranking_pearson):
-    # Comparación consolidada: cada ranking se conserva en su propia escala de asociación.
-    resumen_filtros = pd.concat(
-        [
-            ranking_chi2.assign(metodo="Chi-cuadrada", medida="V de Cramér", puntaje=ranking_chi2["v_cramer"])[["metodo", "variable", "medida", "puntaje", "p_valor"]],
-            ranking_pearson.assign(metodo="Pearson", medida="abs(r)", puntaje=ranking_pearson["abs_correlacion"])[["metodo", "variable", "medida", "puntaje", "p_valor"]],
-        ],
-        ignore_index=True,
-    ).sort_values(["metodo", "puntaje"], ascending=[True, False])
-    print("Comparación de variables descriptivas frente al objetivo, ordenada dentro de cada filtro:")
-    resumen_filtros.round(4)
-    return
-
-
-@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 8. Comparación de modelos con validación cruzada (5 particiones)
+    ## 7. Justificación de la Elección de Modelos, Metodología y Optimización (Grid Search + CV)
 
-    Para comparar distintos algoritmos bajo las mismas condiciones, probamos tres modelos clásicos
-    de clasificación supervisada dentro del mismo pipeline (con imputación, escalamiento y filtros
-    Chi-cuadrada y Pearson en cada partición para evitar fuga de datos):
+    Para cubrir distintas familias de clasificadores vistos en clase y comparar cuál generaliza mejor, elegimos **tres modelos de complejidad creciente**:
+    1. **Regresión Logística:** Es nuestro modelo lineal base. Calcula directamente una combinación lineal de las variables para estimar la probabilidad de suscripción. Lo incluimos por su rapidez e interpretabilidad, aunque tiene la limitación de no capturar interacciones no lineales complejas.
+    2. **Árbol de Decisión (`DecisionTreeClassifier`):** Es un modelo no lineal que divide a los clientes mediante reglas jerárquicas tipo "si-entonces" (por ejemplo, si tuvo éxito en la campaña anterior y tiene cierto saldo). Captura relaciones no lineales, pero un árbol suelto suele ser sensible a pequeñas variaciones en los datos.
+    3. **Random Forest (`RandomForestClassifier`):** Es un ensamble tipo *bagging* que entrena muchos árboles de decisión sobre submuestras aleatorias de datos y variables, y luego promedia sus predicciones. Lo elegimos porque reduce la varianza de un árbol individual, maneja muy bien mezclas de variables numéricas y categóricas codificadas, y evita el sobreajuste cuando se regula la profundidad de sus árboles.
 
-    1. **Regresión Logística** (modelo lineal base).
-    2. **Árbol de Decisión** (`max_depth=6`, `min_samples_leaf=50`).
-    3. **Random Forest** (150 árboles, `max_depth=12`, `min_samples_leaf=20`).
-
-    Los tres usan `class_weight="balanced"` porque la clase positiva (sí contrata) es minoritaria (11.7%).
+    **Metodología para manejar el desbalance y optimizar sin fuga de datos:**
+    - **Compensación del desbalance (`class_weight="balanced"`):** Como solo el 11.7% de los registros son positivos, un modelo sin ajuste aprendería a predecir casi siempre "No". Con pesos balanceados penalizamos más equivocarse en los clientes que sí contratan.
+    - **Búsqueda de hiperparámetros con `GridSearchCV` y Validación Cruzada Estratificada (`5-Fold StratifiedKFold`):** Para no elegir hiperparámetros al tanteo ni usar el conjunto de prueba, aplicamos `GridSearchCV` exclusivamente dentro del conjunto de entrenamiento (36,168 registros) optimizando `ROC AUC`. Además, al limitar `max_depth` y exigir un mínimo de muestras por hoja (`min_samples_leaf`) en los árboles, evitamos que memoricen ruido y aseguramos una buena capacidad de generalización.
     """)
     return
 
@@ -763,19 +648,27 @@ def _(mo):
 def _(
     ColumnTransformer,
     DecisionTreeClassifier,
+    GridSearchCV,
     LogisticRegression,
     Pipeline,
     RandomForestClassifier,
     SelectKBest,
+    StratifiedKFold,
+    X_entrenamiento,
     chi2,
     columnas_categoricas,
     columnas_numericas,
+    cross_validate,
     np,
+    pd,
     pearsonr,
+    plt,
+    sns,
     transformador_categorico,
     transformador_numerico,
+    y_entrenamiento,
 ):
-    # Función de Pearson para usarla dentro de SelectKBest.
+    # Función de Pearson para usarla dentro de SelectKBest en cada partición.
     def puntaje_pearson(X, y):
         puntajes, p_valores = [], []
         for indice in range(X.shape[1]):
@@ -811,41 +704,41 @@ def _(
             remainder="drop",
         )
 
-    modelos = {
-        "Regresión Logística": Pipeline(
-            steps=[
-                ("prep", crear_preprocesador()),
-                ("clf", LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42)),
-            ]
+    # Definición de los 3 modelos base y su rejilla de hiperparámetros para GridSearchCV
+    modelos_grid = {
+        "Regresión Logística": (
+            Pipeline(
+                steps=[
+                    ("prep", crear_preprocesador()),
+                    ("clf", LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42)),
+                ]
+            ),
+            {"clf__C": [0.1, 1.0, 10.0]},
         ),
-        "Árbol de Decisión": Pipeline(
-            steps=[
-                ("prep", crear_preprocesador()),
-                ("clf", DecisionTreeClassifier(max_depth=6, min_samples_leaf=50, class_weight="balanced", random_state=42)),
-            ]
+        "Árbol de Decisión": (
+            Pipeline(
+                steps=[
+                    ("prep", crear_preprocesador()),
+                    ("clf", DecisionTreeClassifier(class_weight="balanced", random_state=42)),
+                ]
+            ),
+            {"clf__max_depth": [4, 6, 8], "clf__min_samples_leaf": [25, 50, 100]},
         ),
-        "Random Forest": Pipeline(
-            steps=[
-                ("prep", crear_preprocesador()),
-                ("clf", RandomForestClassifier(n_estimators=150, max_depth=12, min_samples_leaf=20, class_weight="balanced", random_state=42, n_jobs=-1)),
-            ]
+        "Random Forest": (
+            Pipeline(
+                steps=[
+                    ("prep", crear_preprocesador()),
+                    ("clf", RandomForestClassifier(class_weight="balanced", random_state=42, n_jobs=-1)),
+                ]
+            ),
+            {
+                "clf__n_estimators": [100, 150],
+                "clf__max_depth": [8, 12],
+                "clf__min_samples_leaf": [20, 40],
+            },
         ),
     }
-    return (modelos,)
 
-
-@app.cell
-def _(
-    StratifiedKFold,
-    X_entrenamiento,
-    cross_validate,
-    modelos,
-    pd,
-    plt,
-    sns,
-    y_entrenamiento,
-):
-    # Validación cruzada estratificada de 5 particiones sobre los tres modelos.
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     scoring = {
         "roc_auc": "roc_auc",
@@ -855,12 +748,31 @@ def _(
         "recall": "recall",
     }
 
+    modelos_ajustados = {}
+    mejores_hiperparametros = {}
     _filas_cv = []
-    for _nombre, _pipe in modelos.items():
-        _res = cross_validate(_pipe, X_entrenamiento, y_entrenamiento, cv=cv, scoring=scoring, n_jobs=-1)
+
+    # Se ejecuta GridSearchCV únicamente sobre X_entrenamiento, y_entrenamiento (sin tocar X_prueba)
+    for _nombre, (_pipe, _grid_params) in modelos_grid.items():
+        _busqueda = GridSearchCV(
+            _pipe,
+            param_grid=_grid_params,
+            cv=cv,
+            scoring="roc_auc",
+            n_jobs=-1,
+            refit=True,
+        )
+        _busqueda.fit(X_entrenamiento, y_entrenamiento)
+        _mejor_pipe = _busqueda.best_estimator_
+        modelos_ajustados[_nombre] = _mejor_pipe
+        _params_limpios = {k.replace("clf__", ""): v for k, v in _busqueda.best_params_.items()}
+        mejores_hiperparametros[_nombre] = _params_limpios
+
+        _res = cross_validate(_mejor_pipe, X_entrenamiento, y_entrenamiento, cv=cv, scoring=scoring, n_jobs=-1)
         _filas_cv.append(
             {
                 "Modelo": _nombre,
+                "Mejores hiperparámetros (GridSearch)": ", ".join(f"{k}={v}" for k, v in _params_limpios.items()),
                 "ROC AUC": _res["test_roc_auc"].mean(),
                 "ROC AUC std": _res["test_roc_auc"].std(),
                 "Exactitud balanceada": _res["test_balanced_accuracy"].mean(),
@@ -881,7 +793,7 @@ def _(
     )
     _fig, _ax = plt.subplots(figsize=(9.5, 4.5))
     sns.barplot(data=_df_graf, x="Métrica", y="Valor", hue="Modelo", palette="Blues_d", ax=_ax)
-    _ax.set_title("Comparación de modelos en validación cruzada (5 particiones)")
+    _ax.set_title("Comparación de modelos optimizados en validación cruzada (5 particiones)")
     _ax.set_ylim(0, 1.0)
     for _c in _ax.containers:
         _ax.bar_label(_c, fmt="%.2f", fontsize=8, padding=2)
@@ -890,17 +802,23 @@ def _(
 
     print(f"Mejor modelo en validación cruzada: {mejor_modelo_nombre}")
     resultados_validacion.round(3)
-    return mejor_modelo_nombre, resultados_validacion
+    return (
+        mejor_modelo_nombre,
+        mejores_hiperparametros,
+        modelos_ajustados,
+        resultados_validacion,
+    )
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 9. Evaluación en prueba y priorización de llamadas
+    ## 8. Comparación de Métricas: Entrenamiento vs Validación Cruzada vs Prueba (Análisis de Generalización)
 
-    Ahora entrenamos los tres modelos con todo el conjunto de entrenamiento (80%) y los evaluamos
-    en el conjunto de prueba (20%) para ver sus curvas ROC, la matriz de confusión del mejor modelo,
-    las variables más importantes y qué tanto mejora la tasa de suscripción al priorizar llamadas.
+    Para verificar que nuestros modelos tienen buena capacidad de generalización y **no sufren de sobreajuste (overfitting)**, comparamos las métricas obtenidas en:
+    1. **Entrenamiento** (36,168 registros).
+    2. **Validación Cruzada Estratificada de 5 particiones** (promedio de validación interna).
+    3. **Prueba independiente** (9,043 registros nunca vistos durante el entrenamiento ni en el Grid Search).
     """)
     return
 
@@ -914,81 +832,145 @@ def _(
     classification_report,
     f1_score,
     mejor_modelo_nombre,
-    modelos,
+    modelos_ajustados,
     pd,
     precision_score,
     recall_score,
+    resultados_validacion,
     roc_auc_score,
     y_entrenamiento,
     y_prueba,
 ):
-    modelos_ajustados = {}
     probabilidades_prueba = {}
     predicciones_prueba = {}
+    predicciones_entrenamiento = {}
+    _filas_entrenamiento = []
     _filas_prueba = []
+    _filas_comparacion = []
 
-    for _nombre, _pipe in modelos.items():
-        _pipe.fit(X_entrenamiento, y_entrenamiento)
-        _pred = _pipe.predict(X_prueba)
-        _prob = _pipe.predict_proba(X_prueba)[:, 1]
-        modelos_ajustados[_nombre] = _pipe
-        predicciones_prueba[_nombre] = _pred
-        probabilidades_prueba[_nombre] = _prob
-        _filas_prueba.append(
-            {
-                "Modelo": _nombre,
-                "ROC AUC": roc_auc_score(y_prueba, _prob),
-                "Exactitud": accuracy_score(y_prueba, _pred),
-                "Exactitud balanceada": balanced_accuracy_score(y_prueba, _pred),
-                "F1": f1_score(y_prueba, _pred),
-                "Precisión": precision_score(y_prueba, _pred),
-                "Sensibilidad": recall_score(y_prueba, _pred),
-            }
-        )
+    for _nombre, _pipe in modelos_ajustados.items():
+        # Evaluación en Entrenamiento
+        _pred_tr = _pipe.predict(X_entrenamiento)
+        _prob_tr = _pipe.predict_proba(X_entrenamiento)[:, 1]
+        predicciones_entrenamiento[_nombre] = _pred_tr
+        _row_tr = {
+            "Modelo": _nombre,
+            "ROC AUC": roc_auc_score(y_entrenamiento, _prob_tr),
+            "Exactitud": accuracy_score(y_entrenamiento, _pred_tr),
+            "Exactitud balanceada": balanced_accuracy_score(y_entrenamiento, _pred_tr),
+            "F1": f1_score(y_entrenamiento, _pred_tr),
+            "Precisión": precision_score(y_entrenamiento, _pred_tr),
+            "Sensibilidad": recall_score(y_entrenamiento, _pred_tr),
+        }
+        _filas_entrenamiento.append(_row_tr)
 
+        # Evaluación en Prueba
+        _pred_te = _pipe.predict(X_prueba)
+        _prob_te = _pipe.predict_proba(X_prueba)[:, 1]
+        predicciones_prueba[_nombre] = _pred_te
+        probabilidades_prueba[_nombre] = _prob_te
+        _row_te = {
+            "Modelo": _nombre,
+            "ROC AUC": roc_auc_score(y_prueba, _prob_te),
+            "Exactitud": accuracy_score(y_prueba, _pred_te),
+            "Exactitud balanceada": balanced_accuracy_score(y_prueba, _pred_te),
+            "F1": f1_score(y_prueba, _pred_te),
+            "Precisión": precision_score(y_prueba, _pred_te),
+            "Sensibilidad": recall_score(y_prueba, _pred_te),
+        }
+        _filas_prueba.append(_row_te)
+
+        _row_cv = resultados_validacion.loc[resultados_validacion["Modelo"] == _nombre].iloc[0]
+        for _etapa, _r in [
+            ("1. Entrenamiento", _row_tr),
+            ("2. Validación Cruzada (5-Fold)", _row_cv),
+            ("3. Prueba Independiente", _row_te),
+        ]:
+            _filas_comparacion.append(
+                {
+                    "Modelo": _nombre,
+                    "Etapa": _etapa,
+                    "ROC AUC": round(float(_r["ROC AUC"]), 4),
+                    "Exactitud balanceada": round(float(_r["Exactitud balanceada"]), 4),
+                    "F1": round(float(_r["F1"]), 4),
+                    "Precisión": round(float(_r["Precisión"]), 4),
+                    "Sensibilidad": round(float(_r["Sensibilidad"]), 4),
+                }
+            )
+
+    resultados_entrenamiento = pd.DataFrame(_filas_entrenamiento).sort_values("ROC AUC", ascending=False).reset_index(drop=True)
     resultados_prueba = pd.DataFrame(_filas_prueba).sort_values("ROC AUC", ascending=False).reset_index(drop=True)
-    print(f"Reporte de clasificación ({mejor_modelo_nombre}):\n")
+    tabla_comparacion_etapas = pd.DataFrame(_filas_comparacion)
+
+    print(f"Reporte de clasificación en Prueba ({mejor_modelo_nombre}):\n")
     print(classification_report(y_prueba, predicciones_prueba[mejor_modelo_nombre], target_names=["no", "sí"]))
-    resultados_prueba.round(3)
-    return modelos_ajustados, probabilidades_prueba, resultados_prueba
+    tabla_comparacion_etapas
+    return (
+        predicciones_entrenamiento,
+        predicciones_prueba,
+        probabilidades_prueba,
+        resultados_entrenamiento,
+        resultados_prueba,
+        tabla_comparacion_etapas,
+    )
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 9. Curvas ROC y Matrices de Confusión (Entrenamiento vs Prueba)
+
+    Presentamos tanto la **matriz de confusión de entrenamiento** como la **matriz de confusión de prueba** del mejor modelo (**Random Forest**), junto con las curvas ROC comparativas:
+    - Al comparar ambas matrices se observa que las proporciones de aciertos (Verdaderos Negativos y Verdaderos Positivos) y de errores (Falsos Positivos y Falsos Negativos) se mantienen prácticamente idénticas en proporción al tamaño de cada subconjunto (80% vs 20%).
+    - Gracias al uso de `class_weight="balanced"`, el modelo logra detectar alrededor del **60%** de todos los clientes que realmente contratan un depósito (alta sensibilidad), en lugar de ignorar a la clase minoritaria.
+    """)
+    return
 
 
 @app.cell
 def _(
     ConfusionMatrixDisplay,
-    X_prueba,
+    confusion_matrix,
     mejor_modelo_nombre,
-    modelos_ajustados,
     plt,
+    predicciones_entrenamiento,
+    predicciones_prueba,
     probabilidades_prueba,
     roc_auc_score,
     roc_curve,
+    y_entrenamiento,
     y_prueba,
 ):
-    _fig, _axes = plt.subplots(1, 2, figsize=(11.5, 4.5))
+    _cm_train = confusion_matrix(y_entrenamiento, predicciones_entrenamiento[mejor_modelo_nombre])
+    _cm_test = confusion_matrix(y_prueba, predicciones_prueba[mejor_modelo_nombre])
+
+    _fig, _axes = plt.subplots(1, 3, figsize=(15, 4.4))
     for _nombre, _prob in probabilidades_prueba.items():
         _fpr, _tpr, _ = roc_curve(y_prueba, _prob)
         _auc = roc_auc_score(y_prueba, _prob)
         _axes[0].plot(_fpr, _tpr, label=f"{_nombre} (AUC = {_auc:.3f})", linewidth=2)
     _axes[0].plot([0, 1], [0, 1], "k--", label="Azar (AUC = 0.500)")
-    _axes[0].set_title("Curvas ROC en el conjunto de prueba")
+    _axes[0].set_title("Curvas ROC (Conjunto de prueba)")
     _axes[0].set_xlabel("Tasa de Falsos Positivos")
     _axes[0].set_ylabel("Sensibilidad (Verdaderos Positivos)")
-    _axes[0].legend(loc="lower right", fontsize=8.5)
+    _axes[0].legend(loc="lower right", fontsize=8)
 
-    ConfusionMatrixDisplay.from_estimator(
-        modelos_ajustados[mejor_modelo_nombre],
-        X_prueba,
-        y_prueba,
-        display_labels=["No", "Sí"],
-        cmap="Blues",
-        colorbar=False,
-        ax=_axes[1],
+    ConfusionMatrixDisplay(_cm_train, display_labels=["No", "Sí"]).plot(
+        cmap="Blues", colorbar=False, ax=_axes[1], values_format="d"
     )
     _axes[1].grid(False)
-    _axes[1].set_title(f"Matriz de confusión - {mejor_modelo_nombre}")
+    _axes[1].set_title(f"Matriz en Entrenamiento\n({mejor_modelo_nombre}, n={len(y_entrenamiento):,})")
     _axes[1].set_xlabel("Predicción")
     _axes[1].set_ylabel("Valor real")
+
+    ConfusionMatrixDisplay(_cm_test, display_labels=["No", "Sí"]).plot(
+        cmap="Blues", colorbar=False, ax=_axes[2], values_format="d"
+    )
+    _axes[2].grid(False)
+    _axes[2].set_title(f"Matriz en Prueba\n({mejor_modelo_nombre}, n={len(y_prueba):,})")
+    _axes[2].set_xlabel("Predicción")
+    _axes[2].set_ylabel("Valor real")
+
     _fig.tight_layout()
     plt.show()
     return
@@ -1072,7 +1054,7 @@ def _(
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 10. Conclusiones
+    ## 10. Interpretación de Resultados y Conclusiones
     """)
     return
 
@@ -1083,12 +1065,14 @@ def _(
     mo,
     ranking_chi2,
     ranking_pearson,
+    resultados_entrenamiento,
     resultados_prueba,
     resultados_validacion,
     tabla_priorizacion,
 ):
     variables_chi = ", ".join(ranking_chi2.head(3)["variable"])
     variables_pearson = ", ".join(ranking_pearson.head(3)["variable"])
+    fila_tr = resultados_entrenamiento.loc[resultados_entrenamiento["Modelo"] == mejor_modelo_nombre].iloc[0]
     fila_cv = resultados_validacion.loc[resultados_validacion["Modelo"] == mejor_modelo_nombre].iloc[0]
     fila_test = resultados_prueba.loc[resultados_prueba["Modelo"] == mejor_modelo_nombre].iloc[0]
     p10 = tabla_priorizacion.iloc[0]
@@ -1096,21 +1080,11 @@ def _(
 
     mo.md(
         f"""
-        ### Conclusión del proyecto
+        ### Conclusiones del proyecto
 
-        - **Preprocesamiento:** Se limpiaron formatos de texto, se verificó que no había duplicados
-          exactos, se excluyó `duration` para evitar fuga de información y se crearon dos variables nuevas
-          (`presion_contacto` y `balance_ajustado_credito`). Los filtros destacaron **{variables_chi}**
-          en categóricas y **{variables_pearson}** en numéricas.
-        - **Mejor modelo:** Entre los tres modelos probados, **{mejor_modelo_nombre}** dio el mejor
-          resultado tanto en validación cruzada (ROC AUC = **{fila_cv['ROC AUC']:.3f}**, F1 = **{fila_cv['F1']:.3f}**)
-          como en prueba (ROC AUC = **{fila_test['ROC AUC']:.3f}**, Exactitud balanceada = **{fila_test['Exactitud balanceada']:.3f}**,
-          F1 = **{fila_test['F1']:.3f}**), superando a la Regresión Logística y al Árbol de Decisión.
-        - **Aplicación a campañas telefónicas:** Al ordenar a los clientes por la probabilidad estimada,
-          llamar solo al **Top 10%** sube la tasa de éxito de 11.7% a **{p10['Tasa de éxito (%)']:.1f}%**
-          (**{p10['Mejora vs azar']:.2f}x** mejor que al azar) y captura el **{p10['% del total capturado']:.1f}%**
-          de los suscriptores. Si se contacta al **Top 30%**, se captura el **{p30['% del total capturado']:.1f}%**
-          ahorrando el 70% de llamadas.
+        - **Preprocesamiento justificado y sin fuga de datos:** Se limpiaron formatos de texto, se verificó que no había duplicados exactos, se conservaron los valores extremos reales y el código `pdays = -1`, se excluyó `duration` porque no se conoce antes de llamar y se crearon dos variables derivadas útiles (`presion_contacto` y `balance_ajustado_credito`). Los filtros destacaron **{variables_chi}** en categóricas y **{variables_pearson}** en numéricas.
+        - **Optimización y ausencia de sobreajuste:** Mediante `GridSearchCV` con validación cruzada estratificada de 5 particiones (usando únicamente entrenamiento), **{mejor_modelo_nombre}** resultó el mejor clasificador. Al comparar Entrenamiento (ROC AUC = **{fila_tr['ROC AUC']:.3f}**), Validación Cruzada (ROC AUC = **{fila_cv['ROC AUC']:.3f}**) y Prueba (ROC AUC = **{fila_test['ROC AUC']:.3f}**, Exactitud balanceada = **{fila_test['Exactitud balanceada']:.3f}**), comprobamos que el modelo generaliza bien y no está sobreajustado.
+        - **Impacto práctico en la campaña telefónica:** Si el banco ordena a sus clientes con las probabilidades de **{mejor_modelo_nombre}** y llama primero al **Top 10%**, la tasa de aceptación sube de 11.7% a **{p10['Tasa de éxito (%)']:.1f}%** (**{p10['Mejora vs azar']:.2f}x** mejor que llamar al azar) y captura el **{p10['% del total capturado']:.1f}%** de todos los depósitos posibles. Llamando solo al **Top 30%**, el banco consigue el **{p30['% del total capturado']:.1f}%** de las suscripciones ahorrándose el 70% de las llamadas.
         """
     )
     return

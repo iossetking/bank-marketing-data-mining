@@ -1,7 +1,15 @@
 """
-Ejecuta el flujo completo del proyecto Bank Marketing (Data Mining) con 3 modelos
-clásicos (Regresión Logística, Árbol de Decisión y Random Forest), guarda las
-gráficas en outputs/figuras/ y las métricas en outputs/metricas_resumen.json.
+Ejecuta el flujo completo del proyecto Bank Marketing (Minería de Datos):
+- Diagnóstico y limpieza de datos.
+- Ingeniería de características (variables derivadas) y exclusión de duration.
+- Filtros de selección (Chi-cuadrada y Pearson) dentro del pipeline.
+- Búsqueda de hiperparámetros con GridSearchCV (5-Fold Stratified CV) sobre
+  entrenamiento (sin tocar el conjunto de prueba) para 3 modelos clásicos:
+  Regresión Logística, Árbol de Decisión y Random Forest.
+- Comparación de métricas de Entrenamiento, Validación Cruzada y Prueba para
+  comprobar capacidad de generalización y ausencia de sobreajuste.
+- Matrices de confusión de Entrenamiento y Prueba del mejor modelo.
+- Importancia de variables y tabla de priorización de llamadas.
 """
 
 from __future__ import annotations
@@ -30,13 +38,19 @@ from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
     classification_report,
+    confusion_matrix,
     f1_score,
     precision_score,
     recall_score,
     roc_auc_score,
     roc_curve,
 )
-from sklearn.model_selection import StratifiedKFold, cross_validate, train_test_split
+from sklearn.model_selection import (
+    GridSearchCV,
+    StratifiedKFold,
+    cross_validate,
+    train_test_split,
+)
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 from sklearn.tree import DecisionTreeClassifier
@@ -126,18 +140,20 @@ def ejecutar():
 
     # Ingeniería de características (variables derivadas) y exclusión de duration
     datos_modelo = datos_limpios.copy()
+    for col_bin in ["default", "housing", "loan"]:
+        datos_modelo[col_bin] = datos_modelo[col_bin].eq("yes").astype(int)
+
     datos_modelo["presion_contacto"] = datos_modelo["campaign"] / (datos_modelo["previous"] + 1)
     datos_modelo["balance_ajustado_credito"] = datos_modelo["balance"] / (
-        1
-        + datos_modelo["housing"].eq("yes").astype(int)
-        + datos_modelo["loan"].eq("yes").astype(int)
+        1 + datos_modelo["housing"] + datos_modelo["loan"]
     )
 
     X = datos_modelo.drop(columns=["y", "duration"])
     y = (datos_modelo["y"] == "yes").astype(int)
 
-    cols_num = X.select_dtypes(include="number").columns.tolist()
-    cols_cat = X.select_dtypes(exclude="number").columns.tolist()
+    cols_bin = ["default", "housing", "loan"]
+    cols_num = [c for c in X.select_dtypes(include="number").columns if c not in cols_bin]
+    cols_cat = [*X.select_dtypes(exclude="number").columns, *cols_bin]
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.20, random_state=42, stratify=y
@@ -188,7 +204,12 @@ def ejecutar():
         tf_cat = Pipeline(
             [
                 ("imputacion", SimpleImputer(strategy="most_frequent")),
-                ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+                (
+                    "onehot",
+                    OneHotEncoder(
+                        drop="if_binary", handle_unknown="ignore", sparse_output=False
+                    ),
+                ),
                 ("filtro_chi2", SelectKBest(score_func=chi2, k=25)),
             ]
         )
@@ -197,29 +218,43 @@ def ejecutar():
             remainder="drop",
         )
 
-    # 3 modelos clásicos vistos en clase de Minería de Datos
-    modelos = {
-        "Regresión Logística": Pipeline(
-            [
-                ("prep", crear_prep()),
-                ("clf", LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42)),
-            ]
+    # 3 modelos clásicos vistos en clase + rejillas de hiperparámetros para GridSearchCV
+    modelos_base = {
+        "Regresión Logística": (
+            Pipeline(
+                [
+                    ("prep", crear_prep()),
+                    ("clf", LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42)),
+                ]
+            ),
+            {"clf__C": [0.1, 1.0, 10.0]},
         ),
-        "Árbol de Decisión": Pipeline(
-            [
-                ("prep", crear_prep()),
-                ("clf", DecisionTreeClassifier(max_depth=6, min_samples_leaf=50, class_weight="balanced", random_state=42)),
-            ]
+        "Árbol de Decisión": (
+            Pipeline(
+                [
+                    ("prep", crear_prep()),
+                    ("clf", DecisionTreeClassifier(class_weight="balanced", random_state=42)),
+                ]
+            ),
+            {"clf__max_depth": [4, 6, 8], "clf__min_samples_leaf": [25, 50, 100]},
         ),
-        "Random Forest": Pipeline(
-            [
-                ("prep", crear_prep()),
-                ("clf", RandomForestClassifier(n_estimators=150, max_depth=12, min_samples_leaf=20, class_weight="balanced", random_state=42, n_jobs=-1)),
-            ]
+        "Random Forest": (
+            Pipeline(
+                [
+                    ("prep", crear_prep()),
+                    ("clf", RandomForestClassifier(class_weight="balanced", random_state=42, n_jobs=-1)),
+                ]
+            ),
+            {
+                "clf__n_estimators": [100, 150],
+                "clf__max_depth": [8, 12],
+                "clf__min_samples_leaf": [20, 40],
+            },
         ),
     }
 
-    # Validación cruzada estratificada (5 particiones)
+    # Validación cruzada estratificada (5 particiones) y búsqueda de hiperparámetros (GridSearchCV)
+    # IMPORTANTE: Solo se utiliza X_train y y_train para optimizar hiperparámetros
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     scoring = {
         "roc_auc": "roc_auc",
@@ -229,12 +264,40 @@ def ejecutar():
         "recall": "recall",
     }
 
+    mejores_modelos = {}
+    mejores_params = {}
     filas_cv = []
-    for nombre, pipe in modelos.items():
-        res = cross_validate(pipe, X_train, y_train, cv=cv, scoring=scoring, n_jobs=-1)
+    filas_train = []
+
+    for nombre, (pipe, param_grid) in modelos_base.items():
+        grid = GridSearchCV(
+            pipe,
+            param_grid=param_grid,
+            cv=cv,
+            scoring="roc_auc",
+            n_jobs=-1,
+            refit=True,
+        )
+        grid.fit(X_train, y_train)
+        mejor_pipe = grid.best_estimator_
+        mejores_modelos[nombre] = mejor_pipe
+        params_limpios = {k.replace("clf__", ""): v for k, v in grid.best_params_.items()}
+        mejores_params[nombre] = params_limpios
+
+        # Evaluamos con cross_validate (incluyendo return_train_score=True) el modelo con mejores hiperparámetros
+        res = cross_validate(
+            mejor_pipe,
+            X_train,
+            y_train,
+            cv=cv,
+            scoring=scoring,
+            return_train_score=True,
+            n_jobs=-1,
+        )
         filas_cv.append(
             {
                 "Modelo": nombre,
+                "Mejores hiperparámetros": ", ".join(f"{k}={v}" for k, v in params_limpios.items()),
                 "ROC AUC": round(float(res["test_roc_auc"].mean()), 4),
                 "ROC AUC std": round(float(res["test_roc_auc"].std()), 4),
                 "Exactitud Balanceada": round(float(res["test_balanced_accuracy"].mean()), 4),
@@ -243,6 +306,7 @@ def ejecutar():
                 "Sensibilidad": round(float(res["test_recall"].mean()), 4),
             }
         )
+
     df_cv = pd.DataFrame(filas_cv).sort_values("ROC AUC", ascending=False).reset_index(drop=True)
     mejor_nombre = df_cv.iloc[0]["Modelo"]
 
@@ -255,7 +319,7 @@ def ejecutar():
     )
     fig, ax = plt.subplots(figsize=(9.5, 4.3))
     sns.barplot(data=df_melt, x="Métrica", y="Valor", hue="Modelo", palette="Blues_d", ax=ax)
-    ax.set_title("Comparación de modelos en validación cruzada (5 particiones)")
+    ax.set_title("Comparación de modelos optimizados en validación cruzada (5 particiones)")
     ax.set_ylim(0, 1.0)
     for c in ax.containers:
         ax.bar_label(c, fmt="%.2f", fontsize=8, padding=2)
@@ -263,62 +327,107 @@ def ejecutar():
     fig.savefig(FIG_DIR / "04_comparacion_modelos.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
-    # Evaluación en conjunto de prueba
+    # Evaluación en conjunto de entrenamiento completo y conjunto de prueba independiente
     filas_test = []
     probs_test = {}
     preds_test = {}
-    ajustados = {}
-    for nombre, pipe in modelos.items():
-        pipe.fit(X_train, y_train)
-        pred = pipe.predict(X_test)
-        prob = pipe.predict_proba(X_test)[:, 1]
-        ajustados[nombre] = pipe
-        preds_test[nombre] = pred
-        probs_test[nombre] = prob
+    preds_train = {}
+    probs_train = {}
+
+    for nombre, mejor_pipe in mejores_modelos.items():
+        # Entrenamiento (ya está ajustado por refit=True en X_train, y_train)
+        pred_tr = mejor_pipe.predict(X_train)
+        prob_tr = mejor_pipe.predict_proba(X_train)[:, 1]
+        preds_train[nombre] = pred_tr
+        probs_train[nombre] = prob_tr
+        filas_train.append(
+            {
+                "Modelo": nombre,
+                "ROC AUC": round(float(roc_auc_score(y_train, prob_tr)), 4),
+                "Exactitud": round(float(accuracy_score(y_train, pred_tr)), 4),
+                "Exactitud Balanceada": round(float(balanced_accuracy_score(y_train, pred_tr)), 4),
+                "F1": round(float(f1_score(y_train, pred_tr)), 4),
+                "Precisión": round(float(precision_score(y_train, pred_tr)), 4),
+                "Sensibilidad": round(float(recall_score(y_train, pred_tr)), 4),
+            }
+        )
+
+        # Prueba
+        pred_te = mejor_pipe.predict(X_test)
+        prob_te = mejor_pipe.predict_proba(X_test)[:, 1]
+        preds_test[nombre] = pred_te
+        probs_test[nombre] = prob_te
         filas_test.append(
             {
                 "Modelo": nombre,
-                "ROC AUC": round(float(roc_auc_score(y_test, prob)), 4),
-                "Exactitud": round(float(accuracy_score(y_test, pred)), 4),
-                "Exactitud Balanceada": round(float(balanced_accuracy_score(y_test, pred)), 4),
-                "F1": round(float(f1_score(y_test, pred)), 4),
-                "Precisión": round(float(precision_score(y_test, pred)), 4),
-                "Sensibilidad": round(float(recall_score(y_test, pred)), 4),
+                "ROC AUC": round(float(roc_auc_score(y_test, prob_te)), 4),
+                "Exactitud": round(float(accuracy_score(y_test, pred_te)), 4),
+                "Exactitud Balanceada": round(float(balanced_accuracy_score(y_test, pred_te)), 4),
+                "F1": round(float(f1_score(y_test, pred_te)), 4),
+                "Precisión": round(float(precision_score(y_test, pred_te)), 4),
+                "Sensibilidad": round(float(recall_score(y_test, pred_te)), 4),
             }
         )
+
+    df_train = pd.DataFrame(filas_train).sort_values("ROC AUC", ascending=False).reset_index(drop=True)
     df_test = pd.DataFrame(filas_test).sort_values("ROC AUC", ascending=False).reset_index(drop=True)
 
-    # Gráfica 5: Curvas ROC comparativas y matriz de confusión del mejor modelo
-    fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.5))
+    # Tabla comparativa Entrenamiento vs Validación Cruzada vs Prueba para todos los modelos
+    comparacion_etapas = []
+    for nombre in df_cv["Modelo"]:
+        tr_row = next(r for r in filas_train if r["Modelo"] == nombre)
+        cv_row = next(r for r in filas_cv if r["Modelo"] == nombre)
+        te_row = next(r for r in filas_test if r["Modelo"] == nombre)
+        for etapa, row in [("Entrenamiento", tr_row), ("Validación Cruzada (5-Fold)", cv_row), ("Prueba", te_row)]:
+            comparacion_etapas.append(
+                {
+                    "Modelo": nombre,
+                    "Etapa": etapa,
+                    "ROC AUC": row["ROC AUC"],
+                    "Exactitud Balanceada": row["Exactitud Balanceada"],
+                    "F1": row["F1"],
+                    "Precisión": row["Precisión"],
+                    "Sensibilidad": row["Sensibilidad"],
+                }
+            )
+
+    # Matrices de confusión de Entrenamiento y Prueba del mejor modelo + Curvas ROC
+    cm_train = confusion_matrix(y_train, preds_train[mejor_nombre])
+    cm_test = confusion_matrix(y_test, preds_test[mejor_nombre])
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.4))
     for nombre, prob in probs_test.items():
         fpr, tpr, _ = roc_curve(y_test, prob)
         auc = roc_auc_score(y_test, prob)
         axes[0].plot(fpr, tpr, label=f"{nombre} (AUC = {auc:.3f})", linewidth=2)
     axes[0].plot([0, 1], [0, 1], "k--", label="Azar (AUC = 0.500)")
-    axes[0].set_title("Curvas ROC en el conjunto de prueba")
+    axes[0].set_title("Curvas ROC (Conjunto de prueba)")
     axes[0].set_xlabel("Tasa de Falsos Positivos")
     axes[0].set_ylabel("Sensibilidad (Verdaderos Positivos)")
-    axes[0].legend(loc="lower right", fontsize=8.5)
+    axes[0].legend(loc="lower right", fontsize=8)
 
-    ConfusionMatrixDisplay.from_estimator(
-        ajustados[mejor_nombre],
-        X_test,
-        y_test,
-        display_labels=["No", "Sí"],
-        cmap="Blues",
-        colorbar=False,
-        ax=axes[1],
+    ConfusionMatrixDisplay(cm_train, display_labels=["No", "Sí"]).plot(
+        cmap="Blues", colorbar=False, ax=axes[1], values_format="d"
     )
     axes[1].grid(False)
-    axes[1].set_title(f"Matriz de confusión - {mejor_nombre}")
+    axes[1].set_title(f"Matriz en Entrenamiento\n({mejor_nombre}, n={len(y_train):,})")
     axes[1].set_xlabel("Predicción")
     axes[1].set_ylabel("Valor real")
+
+    ConfusionMatrixDisplay(cm_test, display_labels=["No", "Sí"]).plot(
+        cmap="Blues", colorbar=False, ax=axes[2], values_format="d"
+    )
+    axes[2].grid(False)
+    axes[2].set_title(f"Matriz en Prueba\n({mejor_nombre}, n={len(y_test):,})")
+    axes[2].set_xlabel("Predicción")
+    axes[2].set_ylabel("Valor real")
+
     fig.tight_layout()
     fig.savefig(FIG_DIR / "05_roc_y_confusion.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
     # Importancia de características (feature_importances_ del Random Forest)
-    mejor_pipe = ajustados[mejor_nombre]
+    mejor_pipe = mejores_modelos[mejor_nombre]
     prep_fit = mejor_pipe.named_steps["prep"]
     clf_fit = mejor_pipe.named_steps["clf"]
     nombres_num = prep_fit.named_transformers_["num"].named_steps["filtro_pearson"].get_feature_names_out(cols_num)
@@ -365,7 +474,7 @@ def ejecutar():
     axes[0].set_xlabel("Importancia")
 
     grupos_plot = df_prio.iloc[:-1]
-    axes[1].bar(grupos_plot["grupo"], grupos_plot["tasa_exito_pct"], color="#8ecae6", label="Modelo Random Forest")
+    axes[1].bar(grupos_plot["grupo"], grupos_plot["tasa_exito_pct"], color="#8ecae6", label=f"Modelo {mejor_nombre}")
     axes[1].axhline(tasa_base * 100, color="red", linestyle="--", label=f"Sin modelo ({tasa_base*100:.1f}%)")
     axes[1].set_title("Tasa de suscripción al priorizar llamadas")
     axes[1].set_ylabel("Clientes que contratan (%)")
@@ -385,9 +494,24 @@ def ejecutar():
         "positivos_pct": round(float(y.mean() * 100), 2),
         "ranking_chi2": ranking_chi2.head(4).to_dict(orient="records"),
         "ranking_pearson": ranking_pearson.head(4).to_dict(orient="records"),
+        "mejores_hiperparametros": mejores_params,
+        "train": df_train.to_dict(orient="records"),
         "cv": df_cv.to_dict(orient="records"),
         "test": df_test.to_dict(orient="records"),
+        "comparacion_etapas": comparacion_etapas,
         "mejor_modelo": mejor_nombre,
+        "matriz_confusion_train": {
+            "tn": int(cm_train[0, 0]),
+            "fp": int(cm_train[0, 1]),
+            "fn": int(cm_train[1, 0]),
+            "tp": int(cm_train[1, 1]),
+        },
+        "matriz_confusion_test": {
+            "tn": int(cm_test[0, 0]),
+            "fp": int(cm_test[0, 1]),
+            "fn": int(cm_test[1, 0]),
+            "tp": int(cm_test[1, 1]),
+        },
         "importancia_top8": df_imp.head(8).to_dict(orient="records"),
         "priorizacion": df_prio.to_dict(orient="records"),
         "reporte_clasificacion": classification_report(
@@ -402,10 +526,12 @@ def ejecutar():
 
 if __name__ == "__main__":
     r = ejecutar()
-    print("=== VALIDACIÓN CRUZADA ===")
-    print(pd.DataFrame(r["cv"]).to_string(index=False))
-    print("\n=== PRUEBA ===")
-    print(pd.DataFrame(r["test"]).to_string(index=False))
+    print("=== HIPERPARÁMETROS ÓPTIMOS (GridSearchCV) ===")
+    print(json.dumps(r["mejores_hiperparametros"], indent=2, ensure_ascii=False))
+    print("\n=== COMPARACIÓN ENTRENAMIENTO vs VALIDACIÓN vs PRUEBA ===")
+    print(pd.DataFrame(r["comparacion_etapas"]).to_string(index=False))
     print(f"\nMejor modelo: {r['mejor_modelo']}")
+    print("Matriz Entrenamiento:", r["matriz_confusion_train"])
+    print("Matriz Prueba:", r["matriz_confusion_test"])
     print("\n=== PRIORIZACIÓN ===")
     print(pd.DataFrame(r["priorizacion"]).to_string(index=False))

@@ -52,130 +52,271 @@
       "p_valor": 5.793932716105881e-44
     }
   ],
-  "cv": [
+  "mejores_hiperparametros": {
+    "Regresión Logística": {
+      "C": 10.0
+    },
+    "Árbol de Decisión": {
+      "max_depth": 8,
+      "min_samples_leaf": 50
+    },
+    "Random Forest": {
+      "max_depth": 12,
+      "min_samples_leaf": 20,
+      "n_estimators": 150
+    }
+  },
+  "train": [
     {
       "Modelo": "Random Forest",
-      "ROC AUC": 0.7517,
-      "ROC AUC std": 0.003,
-      "Exactitud Balanceada": 0.6953,
-      "F1": 0.3848,
-      "Precisión": 0.2875,
-      "Sensibilidad": 0.5821
+      "ROC AUC": 0.8078,
+      "Exactitud": 0.8009,
+      "Exactitud Balanceada": 0.7256,
+      "F1": 0.4244,
+      "Precisión": 0.3206,
+      "Sensibilidad": 0.6273
+    },
+    {
+      "Modelo": "Árbol de Decisión",
+      "ROC AUC": 0.7491,
+      "Exactitud": 0.7515,
+      "Exactitud Balanceada": 0.6856,
+      "F1": 0.3608,
+      "Precisión": 0.258,
+      "Sensibilidad": 0.5996
     },
     {
       "Modelo": "Regresión Logística",
-      "ROC AUC": 0.7445,
-      "ROC AUC std": 0.0005,
+      "ROC AUC": 0.7475,
+      "Exactitud": 0.7647,
+      "Exactitud Balanceada": 0.6885,
+      "F1": 0.3694,
+      "Precisión": 0.2691,
+      "Sensibilidad": 0.589
+    }
+  ],
+  "cv": [
+    {
+      "Modelo": "Random Forest",
+      "Mejores hiperparámetros": "max_depth=12, min_samples_leaf=20, n_estimators=150",
+      "ROC AUC": 0.7533,
+      "ROC AUC std": 0.0043,
+      "Exactitud Balanceada": 0.6983,
+      "F1": 0.3896,
+      "Precisión": 0.2924,
+      "Sensibilidad": 0.584
+    },
+    {
+      "Modelo": "Regresión Logística",
+      "Mejores hiperparámetros": "C=10.0",
+      "ROC AUC": 0.7446,
+      "ROC AUC std": 0.0006,
       "Exactitud Balanceada": 0.6875,
-      "F1": 0.368,
+      "F1": 0.3679,
       "Precisión": 0.2678,
       "Sensibilidad": 0.5883
     },
     {
       "Modelo": "Árbol de Decisión",
-      "ROC AUC": 0.7206,
-      "ROC AUC std": 0.0052,
-      "Exactitud Balanceada": 0.675,
-      "F1": 0.3902,
-      "Precisión": 0.3289,
-      "Sensibilidad": 0.4798
+      "Mejores hiperparámetros": "max_depth=8, min_samples_leaf=50",
+      "ROC AUC": 0.7329,
+      "ROC AUC std": 0.0034,
+      "Exactitud Balanceada": 0.6802,
+      "F1": 0.3555,
+      "Precisión": 0.2552,
+      "Sensibilidad": 0.589
     }
   ],
   "test": [
     {
       "Modelo": "Random Forest",
-      "ROC AUC": 0.765,
-      "Exactitud": 0.7804,
-      "Exactitud Balanceada": 0.701,
-      "F1": 0.3889,
-      "Precisión": 0.2883,
-      "Sensibilidad": 0.5974
+      "ROC AUC": 0.7674,
+      "Exactitud": 0.7886,
+      "Exactitud Balanceada": 0.7044,
+      "F1": 0.3968,
+      "Precisión": 0.2978,
+      "Sensibilidad": 0.5945
     },
     {
       "Modelo": "Regresión Logística",
-      "ROC AUC": 0.7521,
-      "Exactitud": 0.7642,
-      "Exactitud Balanceada": 0.6886,
-      "F1": 0.3692,
-      "Precisión": 0.2687,
-      "Sensibilidad": 0.5898
+      "ROC AUC": 0.7524,
+      "Exactitud": 0.7628,
+      "Exactitud Balanceada": 0.689,
+      "F1": 0.3689,
+      "Precisión": 0.2678,
+      "Sensibilidad": 0.5926
     },
     {
       "Modelo": "Árbol de Decisión",
-      "ROC AUC": 0.7261,
-      "Exactitud": 0.8272,
-      "Exactitud Balanceada": 0.6828,
-      "F1": 0.4009,
-      "Precisión": 0.3372,
-      "Sensibilidad": 0.4943
+      "ROC AUC": 0.7358,
+      "Exactitud": 0.7467,
+      "Exactitud Balanceada": 0.6815,
+      "F1": 0.3552,
+      "Precisión": 0.2529,
+      "Sensibilidad": 0.5964
+    }
+  ],
+  "comparacion_etapas": [
+    {
+      "Modelo": "Random Forest",
+      "Etapa": "Entrenamiento",
+      "ROC AUC": 0.8078,
+      "Exactitud Balanceada": 0.7256,
+      "F1": 0.4244,
+      "Precisión": 0.3206,
+      "Sensibilidad": 0.6273
+    },
+    {
+      "Modelo": "Random Forest",
+      "Etapa": "Validación Cruzada (5-Fold)",
+      "ROC AUC": 0.7533,
+      "Exactitud Balanceada": 0.6983,
+      "F1": 0.3896,
+      "Precisión": 0.2924,
+      "Sensibilidad": 0.584
+    },
+    {
+      "Modelo": "Random Forest",
+      "Etapa": "Prueba",
+      "ROC AUC": 0.7674,
+      "Exactitud Balanceada": 0.7044,
+      "F1": 0.3968,
+      "Precisión": 0.2978,
+      "Sensibilidad": 0.5945
+    },
+    {
+      "Modelo": "Regresión Logística",
+      "Etapa": "Entrenamiento",
+      "ROC AUC": 0.7475,
+      "Exactitud Balanceada": 0.6885,
+      "F1": 0.3694,
+      "Precisión": 0.2691,
+      "Sensibilidad": 0.589
+    },
+    {
+      "Modelo": "Regresión Logística",
+      "Etapa": "Validación Cruzada (5-Fold)",
+      "ROC AUC": 0.7446,
+      "Exactitud Balanceada": 0.6875,
+      "F1": 0.3679,
+      "Precisión": 0.2678,
+      "Sensibilidad": 0.5883
+    },
+    {
+      "Modelo": "Regresión Logística",
+      "Etapa": "Prueba",
+      "ROC AUC": 0.7524,
+      "Exactitud Balanceada": 0.689,
+      "F1": 0.3689,
+      "Precisión": 0.2678,
+      "Sensibilidad": 0.5926
+    },
+    {
+      "Modelo": "Árbol de Decisión",
+      "Etapa": "Entrenamiento",
+      "ROC AUC": 0.7491,
+      "Exactitud Balanceada": 0.6856,
+      "F1": 0.3608,
+      "Precisión": 0.258,
+      "Sensibilidad": 0.5996
+    },
+    {
+      "Modelo": "Árbol de Decisión",
+      "Etapa": "Validación Cruzada (5-Fold)",
+      "ROC AUC": 0.7329,
+      "Exactitud Balanceada": 0.6802,
+      "F1": 0.3555,
+      "Precisión": 0.2552,
+      "Sensibilidad": 0.589
+    },
+    {
+      "Modelo": "Árbol de Decisión",
+      "Etapa": "Prueba",
+      "ROC AUC": 0.7358,
+      "Exactitud Balanceada": 0.6815,
+      "F1": 0.3552,
+      "Precisión": 0.2529,
+      "Sensibilidad": 0.5964
     }
   ],
   "mejor_modelo": "Random Forest",
+  "matriz_confusion_train": {
+    "tn": 26314,
+    "fp": 5623,
+    "fn": 1577,
+    "tp": 2654
+  },
+  "matriz_confusion_test": {
+    "tn": 6502,
+    "fp": 1483,
+    "fn": 429,
+    "tp": 629
+  },
   "importancia_top8": [
     {
       "caracteristica": "poutcome_success",
-      "importancia": 0.13864630953751134
+      "importancia": 0.1288595251407889
     },
     {
-      "caracteristica": "balance_ajustado_credito",
-      "importancia": 0.08167843232679421
+      "caracteristica": "housing_1",
+      "importancia": 0.10661117084333231
     },
     {
       "caracteristica": "poutcome_failure",
-      "importancia": 0.0762937132334739
+      "importancia": 0.09868218205029207
     },
     {
-      "caracteristica": "housing_no",
-      "importancia": 0.07533575120018947
+      "caracteristica": "balance_ajustado_credito",
+      "importancia": 0.08926574144374491
     },
     {
       "caracteristica": "pdays",
-      "importancia": 0.07181297424628735
+      "importancia": 0.0749204868031087
     },
     {
       "caracteristica": "balance",
-      "importancia": 0.06728709527437454
+      "importancia": 0.0662367529100236
     },
     {
       "caracteristica": "presion_contacto",
-      "importancia": 0.06701781917863042
+      "importancia": 0.05937279197794742
     },
     {
-      "caracteristica": "housing_yes",
-      "importancia": 0.06181997121635562
+      "caracteristica": "previous",
+      "importancia": 0.04681943129836745
     }
   ],
   "priorizacion": [
     {
       "grupo": "Top 10%",
       "llamadas": 905,
-      "suscriptores": 421,
-      "tasa_exito_pct": 46.5,
-      "captura_total_pct": 39.8,
-      "mejora_vs_azar": 3.98
+      "suscriptores": 434,
+      "tasa_exito_pct": 48.0,
+      "captura_total_pct": 41.0,
+      "mejora_vs_azar": 4.1
     },
     {
       "grupo": "Top 20%",
       "llamadas": 1809,
-      "suscriptores": 589,
-      "tasa_exito_pct": 32.6,
-      "captura_total_pct": 55.7,
-      "mejora_vs_azar": 2.78
+      "suscriptores": 599,
+      "tasa_exito_pct": 33.1,
+      "captura_total_pct": 56.6,
+      "mejora_vs_azar": 2.83
     },
     {
       "grupo": "Top 30%",
       "llamadas": 2713,
-      "suscriptores": 701,
-      "tasa_exito_pct": 25.8,
-      "captura_total_pct": 66.3,
-      "mejora_vs_azar": 2.21
+      "suscriptores": 698,
+      "tasa_exito_pct": 25.7,
+      "captura_total_pct": 66.0,
+      "mejora_vs_azar": 2.2
     },
     {
       "grupo": "Top 50%",
       "llamadas": 4522,
-      "suscriptores": 835,
+      "suscriptores": 836,
       "tasa_exito_pct": 18.5,
-      "captura_total_pct": 78.9,
+      "captura_total_pct": 79.0,
       "mejora_vs_azar": 1.58
     },
     {
@@ -187,5 +328,5 @@
       "mejora_vs_azar": 1.0
     }
   ],
-  "reporte_clasificacion": "              precision    recall  f1-score   support\n\n          No       0.94      0.80      0.87      7985\n          Sí       0.29      0.60      0.39      1058\n\n    accuracy                           0.78      9043\n   macro avg       0.61      0.70      0.63      9043\nweighted avg       0.86      0.78      0.81      9043\n"
+  "reporte_clasificacion": "              precision    recall  f1-score   support\n\n          No       0.94      0.81      0.87      7985\n          Sí       0.30      0.59      0.40      1058\n\n    accuracy                           0.79      9043\n   macro avg       0.62      0.70      0.63      9043\nweighted avg       0.86      0.79      0.82      9043\n"
 }
